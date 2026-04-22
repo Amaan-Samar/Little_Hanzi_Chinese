@@ -290,37 +290,7 @@ export default {
       });
       return flattenedPairs;
     };
-
-    // const comparisonData = computed(() => {
-    //   if (!inputText.value) return {};
-      
-    //   // Split Chinese text by paragraphs (line breaks)
-    //   const chineseParagraphs = inputText.value
-    //     .split(/\n\s*\n|\r\n\s*\r\n/) // Split by double line breaks first
-    //     .flatMap(para => para.split(/\n|\r\n/)) // Then split by single line breaks
-    //     .map(para => para.trim())
-    //     .filter(para => para);
-      
-    //   const result = {};
-      
-    //   chineseParagraphs.forEach((paragraph, index) => {
-    //     const sentenceId = index;
-    //     result[sentenceId] = {
-    //       lines: {},
-    //       sentencePinyin: getPinyinForSentence(paragraph)
-    //     };
-        
-    //     // For paragraphs, we treat the entire paragraph as one "line"
-    //     result[sentenceId].lines[0] = {
-    //       text: paragraph,
-    //       pinyin: getPinyinForSentence(paragraph),
-    //       textAndPinyin: getPinyinAndChar(paragraph)
-    //     };
-    //   });
-      
-    //   return result;
-    // });
-
+    
     const comparisonData = computed(() => {
       if (!inputText.value) return {};
       

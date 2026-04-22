@@ -4,7 +4,7 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue(), VitePWA({ registerType: 'autoUpdate' })],
-  base: '/chinese-writing-assistant/',
+  base: '/Little_Hanzi_Chinese/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

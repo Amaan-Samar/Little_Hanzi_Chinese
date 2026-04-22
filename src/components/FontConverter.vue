@@ -1,22 +1,27 @@
 <template>
   <div class="converter-wrapper">
     <div class="main-content">
-      <FontControls
-        v-model="fontSize"
-        :defaultFontSize="15"
-      />
-
       <div class="input-display-row">
         <!-- Chinese Text Input -->
         <div class="text-section" :style="{fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
-          <textarea 
-            v-model="inputText" 
-            placeholder="Enter Chinese text here..." 
-            class="text-input w-full" 
-            @input="adjustHeight" 
-            @focus="setActiveTextarea('chinese')"
-            ref="chineseTextarea"
-          ></textarea>
+          <div class="input-wrapper">
+            <textarea 
+              v-model="inputText" 
+              placeholder="Enter Chinese text here..." 
+              class="text-input w-full" 
+              @input="adjustHeight" 
+              @focus="setActiveTextarea('chinese')"
+              ref="chineseTextarea"
+            ></textarea>
+            <button 
+              v-if="inputText.trim()" 
+              @click="openEditModal('chinese')" 
+              class="edit-btn"
+              title="Edit in popup"
+            >
+              <EditIcon :size="16" />
+            </button>
+          </div>
           <button @click="clearOrPasteText('chinese')" class="paste-btn">
             {{ inputText.trim() ? 'Clear' : 'Paste' }}
           </button>
@@ -24,65 +29,129 @@
 
         <!-- English Translation Input -->
         <div class="text-section" :style="{fontSize: `${fontSize}px` }">
-          <textarea 
-            v-model="englishText" 
-            placeholder="Enter English translation here..." 
-            class="text-input w-full english-input" 
-            @input="adjustEnglishHeight" 
-            @focus="setActiveTextarea('english')"
-            ref="englishTextarea"
-          ></textarea>
+          <div class="input-wrapper">
+            <textarea 
+              v-model="englishText" 
+              placeholder="Enter English translation here..." 
+              class="text-input w-full english-input" 
+              @input="adjustEnglishHeight" 
+              @focus="setActiveTextarea('english')"
+              ref="englishTextarea"
+            ></textarea>
+            <button 
+              v-if="englishText.trim()" 
+              @click="openEditModal('english')" 
+              class="edit-btn"
+              title="Edit in popup"
+            >
+              <EditIcon :size="16" />
+            </button>
+          </div>
           <button @click="clearOrPasteText('english')" class="paste-btn">
             {{ englishText.trim() ? 'Clear' : 'Paste' }}
           </button>
         </div>
       </div>
 
-      <FloatingControls 
+
+      <!-- Edit Modal -->
+      <EditModal
+        :isOpen="isEditModalOpen"
+        :title="editModalTitle"
+        :content="editModalContent"
+        :fontSize="fontSize"
+        :fontFamily="getFontFamily"
+        @close="closeEditModal"
+        @save="saveEditModalContent"
+      />
+
+      <!-- New Control Bar -->
+      <!-- <ControlBar
         v-if="inputText.trim()"
         :showPinyin="showPinyin"
+        :showEnglish="showEnglish"
+        :showChinese="showChinese"
+        :displayOrder="displayOrder"
+        :fontSize="fontSize"
+        :selectedFont="selectedFont"
         @clear="clearAllText"
         @toggle-pinyin="togglePinyin"
-      />  
+        @toggle-english="toggleEnglish"
+        @toggle-chinese="toggleChinese"
+        @toggle-order="toggleOrder"
+        @update-font-size="updateFontSize"
+        @update-selected-font="updateSelectedFont"
+        @reset-settings="resetSettings"
+      /> -->
 
-      <div v-if="inputText.trim()" class="comparison-section">
+      <div v-if="inputText.trim() && (showEnglish || showChinese)" class="comparison-section">
         <div class="comparison-display relative">
           <template v-if="comparisonData && Object.keys(comparisonData).length">
             <div v-for="(block, sentenceId) in comparisonData" :key="sentenceId" class="comparison-block relative">
               
-              <!-- English Translation Display -->
-              <div v-if="englishSegments[sentenceId]" class="english-translation-box">
-                <div class="english-text" :style="{ fontSize: `${fontSize * 0.8}px`, lineHeight: '1.1' }">
-                  {{ englishSegments[sentenceId] }}
-                </div>
-              </div>
-
-              <!-- Chinese and Pinyin Display -->
-              <div class="line-container">
-                <div class="text-line relative">
-                  <div class="line-characters-and-pinyin" :style="{ fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
-                  <span v-for="(pair, pairIndex) in flattenBlockLines(block)" :key="pairIndex">
-                    <span class="character" :style="{fontWeight: '600' }">
-                      {{ showPinyin ? pair[0] : (pair[0] === ' ' && pair[1] === ' ' ? ' ' : pair[0]) }}
-                    </span>
-                    <span class="pinyin" :style="{fontSize: `${fontSize * 0.8}px`, display: showPinyin ? 'inline' : 'none' }">
-                      {{ pair[1] }}
-                    </span>
-                  </span>
-
+              <!-- Render based on display order and visibility toggles -->
+              <template v-if="displayOrder === 'en-cn'">
+                <!-- English first, then Chinese -->
+                <div v-if="showEnglish && englishSegments[sentenceId]" class="english-translation-box">
+                  <div class="english-text" :style="{ fontSize: `${fontSize * 0.8}px`, lineHeight: '1.1' }">
+                    {{ englishSegments[sentenceId] }}
                   </div>
                 </div>
-              </div>
+
+                <div v-if="showChinese" class="line-container">
+                  <div class="text-line relative">
+                    <div class="line-characters-and-pinyin" :style="{ fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
+                      <span v-for="(pair, pairIndex) in flattenBlockLines(block)" :key="pairIndex">
+                        <span class="character" :style="{fontWeight: '600'}">
+                          {{ showPinyin ? pair[0] : (pair[0] === ' ' && pair[1] === ' ' ? ' ' : pair[0]) }}
+                        </span>
+                        <span class="pinyin" :style="{fontSize: `${fontSize * 0.8}px`, display: showPinyin ? 'inline' : 'none'}">
+                          {{ pair[1] }}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <template v-else>
+                <!-- Chinese first, then English -->
+                <div v-if="showChinese" class="line-container">
+                  <div class="text-line relative">
+                    <div class="line-characters-and-pinyin" :style="{ fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
+                      <span v-for="(pair, pairIndex) in flattenBlockLines(block)" :key="pairIndex">
+                        <span class="character" :style="{fontWeight: '600'}">
+                          {{ showPinyin ? pair[0] : (pair[0] === ' ' && pair[1] === ' ' ? ' ' : pair[0]) }}
+                        </span>
+                        <span class="pinyin" :style="{fontSize: `${fontSize * 0.8}px`, display: showPinyin ? 'inline' : 'none'}">
+                          {{ pair[1] }}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="showEnglish && englishSegments[sentenceId]" class="english-translation-box">
+                  <div class="english-text" :style="{ fontSize: `${fontSize * 0.8}px`, lineHeight: '1.1' }">
+                    {{ englishSegments[sentenceId] }}
+                  </div>
+                </div>
+              </template>
 
             </div>
             <div 
               class="scroll-spacer"
               :style="{
-                minHeight: `calc(66vh - ${fontSize * 2}px)`  // Adjust based on your font size
+                minHeight: `calc(66vh - ${fontSize * 2}px)`
               }"
             ></div>
           </template>
         </div>
+      </div>
+
+      <!-- Empty state when both English and Chinese are hidden -->
+      <div v-else-if="inputText.trim() && !showEnglish && !showChinese" class="empty-state">
+        <p>Both English and Chinese paragraphs are hidden. Toggle them on using the control bar.</p>
       </div>
 
     </div>
@@ -90,92 +159,117 @@
 </template>
 
 <script>
-import FloatingControls from './FloatingControls.vue';
+import { Edit as EditIcon } from 'lucide-vue-next'
+import EditModal from './EditModal.vue'
+import ControlBar from './ControlBar.vue';
 import { ref, computed, watch, reactive} from 'vue';
 import { pinyin } from 'pinyin-pro';
-import FontControls from './FontControls.vue';
-
-
+import { useSettings } from '../composables/useSettings'
 
 
 export default {
   components: {
-    FloatingControls,
-    FontControls,
+    EditModal,
+    ControlBar,
   },
   name: 'FontConverter',
   setup() {
+    const {
+      fontSize,
+      selectedFont,
+      showPinyin,
+      showEnglish,
+      showChinese,
+      displayOrder,
+      resetSettings
+    } = useSettings()
     const inputText = ref('');
     const englishText = ref('');
-    const fontSize = ref(15);
-    const selectedFont = ref('Han_Sans_CN_Light');
+    // const fontSize = ref(15);
+    // const selectedFont = ref('NotoSansSC');
     const chineseTextarea = ref(null);
     const englishTextarea = ref(null);
-    const activeTextarea = ref('chinese'); // Track which textarea is active
+    const activeTextarea = ref('chinese');
     const copiedStates = reactive({});
     const COPIED_ICON_DURATION = 3000;
-    const showPinyin = ref(true);
 
+    const isEditModalOpen = ref(false)
+    const editModalType = ref('chinese') // 'chinese' or 'english'
+    const editModalTitle = computed(() => editModalType.value === 'chinese' ? 'Chinese Text' : 'English Translation')
+    const editModalContent = computed(() => editModalType.value === 'chinese' ? inputText.value : englishText.value)
+
+    const openEditModal = (type) => {
+      editModalType.value = type
+      isEditModalOpen.value = true
+    }
+
+    const closeEditModal = () => {
+      isEditModalOpen.value = false
+    }
+
+    const saveEditModalContent = (newContent) => {
+      if (editModalType.value === 'chinese') {
+        inputText.value = newContent
+      } else {
+        englishText.value = newContent
+      }
+      closeEditModal()
+    }
+
+    // And add these new methods to pass to ControlBar:
+    const updateFontSize = (newSize) => {
+      fontSize.value = newSize
+    }
+    
+    const updateSelectedFont = (newFont) => {
+      selectedFont.value = newFont
+    }
 
     const togglePinyin = () => {
       showPinyin.value = !showPinyin.value;
+    };
+
+    const toggleEnglish = () => {
+      showEnglish.value = !showEnglish.value;
+    };
+
+    const toggleChinese = () => {
+      showChinese.value = !showChinese.value;
+    };
+
+    const toggleOrder = () => {
+      displayOrder.value = displayOrder.value === 'en-cn' ? 'cn-en' : 'en-cn';
     };
 
     const setActiveTextarea = (type) => {
       activeTextarea.value = type;
     };
 
+    // Updated fonts using Google Fonts
     const fonts = {
-      kaiti: "'Kaiti', serif",
-      tegakizatsu: "'tegakizatsu', serif",
-      regular: "'SimSun', serif",
-      cwTeXMing_Medium: "'cwTeXMing_Medium', serif",
-      Han_Sans_CN_Light: "'Han_Sans_CN_Light', serif",
-      GenJyuuGothic: "'GenJyuuGothic', serif",
+      NotoSansSC: "'Noto Sans SC', 'Inter', sans-serif",
+      NotoSerifSC: "'Noto Serif SC', 'Georgia', serif",
+      Inter: "'Inter', 'Noto Sans SC', sans-serif",
+      Roboto: "'Roboto', 'Noto Sans SC', sans-serif",
+      Poppins: "'Poppins', 'Noto Sans SC', sans-serif",
+      ZCOOLKuaiLe: "'ZCOOL KuaiLe', cursive",
+      MaShanZheng: "'Ma Shan Zheng', cursive",
     };
 
     const getFontFamily = computed(() => fonts[selectedFont.value]);
 
-    // Function to break English text into paragraphs that match Chinese paragraphs
-    // const breakEnglishText = (englishText, chineseSegments) => {
-    //   if (!englishText.trim()) return {};
-      
-    //   // Split English text by paragraphs (double line breaks or single line breaks)
-    //   const englishParagraphs = englishText
-    //     .split(/\n\s*\n|\r\n\s*\r\n/) // Split by double line breaks first
-    //     .flatMap(para => para.split(/\n|\r\n/)) // Then split by single line breaks
-    //     .map(para => para.trim())
-    //     .filter(para => para);
-      
-    //   // Create mapping between Chinese and English paragraphs
-    //   const result = {};
-    //   const chineseSegmentKeys = Object.keys(chineseSegments);
-      
-    //   englishParagraphs.forEach((paragraph, index) => {
-    //     if (index < chineseSegmentKeys.length) {
-    //       result[chineseSegmentKeys[index]] = paragraph;
-    //     }
-    //   });
-      
-    //   return result;
-    // };
-
-
     const breakEnglishText = (englishText, chineseSegments) => {
       if (!englishText.trim()) return {};
       
-      // First, normalize all line breaks and replace multiple empty lines with single empty lines
       const normalizedText = englishText
-        .replace(/\r\n/g, '\n') // Normalize to Unix line breaks
-        .replace(/\n\s*\n(\s*\n)*/g, '\n\n'); // Replace multiple empty lines with single empty lines
+        .replace(/\r\n/g, '\n')
+        .replace(/\n\s*\n(\s*\n)*/g, '\n\n');
       
-      // Then split by double line breaks to get paragraphs
       const englishParagraphs = normalizedText
         .split(/\n\n/)
         .map(para => para.trim())
         .filter(para => para);
       
-      // Create mapping between Chinese and English paragraphs
       const result = {};
       const chineseSegmentKeys = Object.keys(chineseSegments);
       
@@ -195,8 +289,7 @@ export default {
     const textBlocks = computed(() => {
       if (!inputText.value) return [];
 
-      const sentences =
-        inputText.value.match(/[^。!?！？]+[。!?！？]+/g) || [];
+      const sentences = inputText.value.match(/[^。!?！？]+[。!?！？]+/g) || [];
       const remainingText = inputText.value.match(/[^。!?！？]+$/);
 
       if (remainingText) {
@@ -252,7 +345,6 @@ export default {
       if (text.trim()) {
         clearText(type);
       } else {
-        // If empty, paste from clipboard
         pasteFromClipboard(type);
       }
     };
@@ -294,12 +386,10 @@ export default {
     const comparisonData = computed(() => {
       if (!inputText.value) return {};
       
-      // First, normalize all line breaks and replace multiple empty lines with single empty lines
       const normalizedText = inputText.value
-        .replace(/\r\n/g, '\n') // Normalize to Unix line breaks
-        .replace(/\n\s*\n(\s*\n)*/g, '\n\n'); // Replace multiple empty lines with single empty lines
+        .replace(/\r\n/g, '\n')
+        .replace(/\n\s*\n(\s*\n)*/g, '\n\n');
       
-      // Then split by double line breaks to get paragraphs
       const chineseParagraphs = normalizedText
         .split(/\n\n/)
         .map(para => para.trim())
@@ -340,14 +430,13 @@ export default {
 
     const getPinyinForSentence = sentence => {
       if (!sentence) return '';
-      
       return pinyin(sentence);
     };
 
     function preprocessing(sentence) {
         const preprocessed_sentence = [];
         let current_segment = '';
-        let current_type = null; // 'chinese', 'english', or 'symbol'
+        let current_type = null;
 
         const isChinese = char => /[\u4e00-\u9fa5]/.test(char);
         const isEnglish = char => /[a-zA-Z0-9]/.test(char);
@@ -356,12 +445,10 @@ export default {
 
         for (const char of sentence) {
             if (isChinese(char)) {
-                // If we were building an english or symbol segment, push it first
                 if (current_type && current_type !== 'chinese') {
                     preprocessed_sentence.push([current_segment]);
                     current_segment = '';
                 }
-                // Push individual Chinese characters as separate segments
                 if (current_segment) {
                     preprocessed_sentence.push([current_segment]);
                     current_segment = '';
@@ -370,7 +457,6 @@ export default {
                 current_type = 'chinese';
             } 
             else if (isEnglish(char) || isSpace(char)) {
-                // If we were building a symbol segment, push it first
                 if (current_type === 'symbol') {
                     preprocessed_sentence.push([current_segment]);
                     current_segment = '';
@@ -379,12 +465,10 @@ export default {
                 current_type = 'english';
             }
             else if (isSymbol(char)) {
-                // If we were building an english segment, push it first
                 if (current_type === 'english') {
                     preprocessed_sentence.push([current_segment]);
                     current_segment = '';
                 }
-                // Push individual symbols as separate segments
                 if (current_segment) {
                     preprocessed_sentence.push([current_segment]);
                     current_segment = '';
@@ -394,7 +478,6 @@ export default {
             }
         }
 
-        // Push any remaining segment
         if (current_segment) {
             preprocessed_sentence.push([current_segment]);
         }
@@ -407,7 +490,7 @@ export default {
         const preprocessedSentence = preprocessing(sentence);
         
         const chineseOnly = sentence.split('').filter(c => /[\u4e00-\u9fa5]/.test(c)).join('');
-        const chinesePinyin = pinyin(chineseOnly); // Get pinyin for Chinese only
+        const chinesePinyin = pinyin(chineseOnly);
         
         const pinyinParts = chinesePinyin.split(' ');
         
@@ -415,7 +498,6 @@ export default {
         
         for (const [text] of preprocessedSentence) {
             if (/[\u4e00-\u9fa5]/.test(text)) {
-                // For Chinese characters, get the next pinyin
                 pinyinObj.push([text, pinyinParts[pinyinIndex] || '']);
                 pinyinIndex++;
             } else {
@@ -470,10 +552,7 @@ export default {
     const copyToClipboard = (text, buttonId) => {
       navigator.clipboard.writeText(text)
         .then(() => {
-          // Set this specific button to "copied" state
           copiedStates[buttonId] = true;
-          
-          // Set a timeout to revert back to the copy icon after COPIED_ICON_DURATION
           setTimeout(() => {
             copiedStates[buttonId] = false;
           }, COPIED_ICON_DURATION);
@@ -545,31 +624,91 @@ export default {
       clearAllText,
       flattenBlockLines,
       showPinyin,
+      showEnglish,
+      showChinese,
+      displayOrder,
       togglePinyin,
+      toggleEnglish,
+      toggleChinese,
+      toggleOrder,
       setActiveTextarea,
       activeTextarea,
+
+      updateFontSize,
+      updateSelectedFont,
+      resetSettings,
+
+      EditIcon,
+      isEditModalOpen,
+      editModalTitle,
+      editModalContent,
+      openEditModal,
+      closeEditModal,
+      saveEditModalContent,
     };
   },
 };
 </script>
+
 <style scoped>
-.line-characters-and-pinyin{
- /* padding: 5px 10px; */
- text-wrap: wrap;
- width: 100%;
- display: flex;
- flex-wrap: wrap;
+
+.input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.edit-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #6c757d;
+  z-index: 10;
+}
+
+.edit-btn:hover {
+  background: #4a6cf7;
+  border-color: #4a6cf7;
+  color: white;
+  transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+  .edit-btn {
+    padding: 8px;
+  }
+  
+  .edit-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.line-characters-and-pinyin {
+  text-wrap: wrap;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .english-translation-box {
-  background-color: rgba(255, 255, 255, 0.3); 
+  background-color: rgba(255, 255, 255, 0.3);
+  margin-bottom: 8px;
 }
 
 .english-text {
   color: #2c3e50;
   line-height: 1.6;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  white-space: pre-wrap; /* Preserve line breaks within paragraphs */
+  white-space: pre-wrap;
 }
 
 .english-input {
@@ -579,6 +718,13 @@ export default {
 
 .english-input::placeholder {
   color: #1f1f20 !important;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-style: italic;
 }
 
 .paste-btn {  
@@ -608,6 +754,7 @@ export default {
 .paste-btn:hover {
   background-color: #c9cacb;
 }
+
 .relative {
   position: relative;
 }
@@ -648,10 +795,6 @@ export default {
   border-radius: 4px;
   border-color: #7a90ff87;
   font-size: 12px;
-  /* outline-color: #7a91ff;  */
-  /* background: rgba(102,126,234,0.05); */
-
-  /* background: rgba(255, 255, 255, 0.3); */
 }
 
 .text-display {
@@ -683,41 +826,38 @@ export default {
   display: block;
   flex-wrap: wrap;
   background-color: rgba(256, 256, 256, 0.4);
-  /* border: 1px solid rgba(135, 206, 235, 0.4); */
   border-radius: 0.25rem;
   padding: 0.2rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-
 .select-input {
   padding: 0.5rem;
   border-radius: 0.25rem;
 }
+
 textarea::placeholder {
   border-color: #7a91ff;
   color: #1f1f20;
-  /* opacity: 1; */
 }
 
-/* These are needed for cross-browser compatibility */
-textarea::-webkit-input-placeholder { /* Chrome/Safari/Opera */
+textarea::-webkit-input-placeholder {
   border-color: #7a91ff;
   color: #1f1f20;
 }
 
-textarea::-moz-placeholder { /* Firefox */
+textarea::-moz-placeholder {
   border-color: #7a91ff;
   color: #1f1f20;
   opacity: 1;
 }
 
-textarea:-ms-input-placeholder { /* IE/Edge */
+textarea:-ms-input-placeholder {
   border-color: #7a91ff;
   color: #1f1f20;
 }
 
-textarea:-moz-placeholder { /* Firefox older versions */
+textarea:-moz-placeholder {
   border-color: #7a91ff;
   color: #1f1f20;
   opacity: 1;
@@ -737,13 +877,6 @@ textarea:-moz-placeholder { /* Firefox older versions */
   .controls-container {
     flex-direction: row;
     align-items: flex-start;
-  }
-
-  .toggle-pinyin-btn:not(.mobile) {
-    top: auto;
-    left: auto;
-    bottom: 20px;
-    right: 10px;
   }
 
   .text-input,

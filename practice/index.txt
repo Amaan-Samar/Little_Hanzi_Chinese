@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="x-ua-compatible" content="ie=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+
+  <link rel="shortcut icon" href="" type="image/x-icon" />
+  <script type="text/javascript">
+
+    // Notice how this gets configured before we load Font Awesome
+    window.FontAwesomeConfig = { autoReplaceSvg: false };
+  </script>
+
+
+  <link rel="stylesheet" href="UI/lib/fontawesome/css/all.min.css" />
+  <link rel="stylesheet" href="UI/lib/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="UI/css/main.css" />
+   <style>
+    #dbManagementDropdown{
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .dropdown-item{
+        padding: 0.5rem 1.5rem;
+        transition: all 0.2s;
+    }
+
+    .dropdown-item:hover {
+        background-color: #f8f9fa;
+        color: #0056b3;
+    }
+
+    .dropdown-item i{
+        width: 20px;
+        text-align: center;
+    }
+    
+    .tab-navigation {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+.nav-tabs .nav-link {
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+    padding: 15px 30px;
+    transition: all 0.3s ease;
+    background: transparent;
+}
+
+.nav-tabs .nav-link:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px 8px 0 0;
+}
+
+.nav-tabs .nav-link.active {
+    color: #fff;
+    background: rgba(255,255,255,0.2);
+    border-radius: 8px 8px 0 0;
+    backdrop-filter: blur(10px);
+}
+
+.duckdb-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.upload-zone {
+    border: 3px dashed #667eea;
+    border-radius: 15px;
+    background: rgba(102,126,234,0.05);
+    transition: all 0.3s ease;
+    min-height: 200px;
+}
+
+.upload-zone:hover, .upload-zone.dragover {
+    border-color: #764ba2;
+    background: rgba(118,75,162,0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102,126,234,0.2);
+}
+
+
+        .tab-navigation {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            color: rgba(255,255,255,0.7);
+            font-weight: 600;
+            padding: 15px 30px;
+            transition: all 0.3s ease;
+            background: transparent;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: #fff;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px 8px 0 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .upload-icon {
+            font-size: 4rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .method-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .method-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        
+        .method-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            margin-bottom: 15px;
+        }
+        
+        .file-upload-icon {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        
+        .url-fetch-icon {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+        }
+        
+        .btn-modern {
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary-modern {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102,126,234,0.3);
+        }
+        
+        .btn-secondary-modern {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+        }
+        
+        .btn-secondary-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(240,147,251,0.3);
+        }
+        
+        .form-control-modern {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control-modern:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102,126,234,0.25);
+        }
+        
+        .processing-indicator {
+            display: none;
+        }
+        
+        .processing-indicator.active {
+            display: block;
+        }
+        
+        .file-info {
+            background: linear-gradient(135deg, #a8edea, #fed6e3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .url-info {
+            background: linear-gradient(135deg, #ffecd2, #fcb69f);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+    
+    </style>
+  <title>Geo Data Server</title>
+</head>
+
+<body>
+  
+<!-- Tab Navigation (Add this after the existing topbar) -->
+  <!-- Tab Navigation -->
+  <div class="tab-navigation">
+    <div class="container">
+      <ul class="nav nav-tabs border-0" id="mainTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="data-serving-tab" data-toggle="tab" href="#data-serving" role="tab" aria-controls="data-serving" aria-selected="true">
+            <i class="fas fa-server mr-2"></i>
+            Data Serving
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link active" id="duckdb-tab" data-toggle="tab" href="#duckdb" role="tab" aria-controls="duckdb" aria-selected="false">
+            <i class="fas fa-database mr-2"></i>
+            DuckDB Engine
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Tab Content -->
+    <div class="tab-content" id="mainTabContent">
+    <!-- Data Serving Tab -->
+        <div class="tab-pane fade" id="data-serving" role="tabpanel" aria-labelledby="data-serving-tab">
+        <!-- Your existing data serving content here -->
+        <div class="d-flex flex-column main-section">
+                        <div id="setting-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-cog mr-1"></i>
+                                    Settings
+                                </h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div>
+                                    <div class="data-item mb-2">
+                                    <div class="d-flex align-items-center border list-header active">
+                                        <a class="
+                                            pl-2
+                                            pr-3
+                                            py-2
+                                            d-flex
+                                            align-item-center
+                                            text-decoration-none text-dark
+                                            flex-grow-1
+                                            " data-toggle="collapse" href="#server-setting" role="button" aria-expanded="true"
+                                        aria-controls="server-setting">
+                                        <h6 class="title m-0 d-flex align-items-center">
+                                            SERVER
+                                        </h6>
+                                        </a>
+                                    </div>
+                                    <div id="server-setting" class="collapse show">
+                                        <div class="p-2 border">
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="server-host">Server host</label>
+                                            </div>
+                                            <select class="custom-select" id="input-server-group">
+
+                                            </select>
+                                            <!-- <input
+                                                type="text"
+                                                id="server-host"
+                                                class="form-control shadow-none"
+                                                placeholder="localhost"
+                                                
+                                            /> -->
+
+                                        </div>
+
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="server-port">Server port</label>
+                                            </div>
+                                            <input type="text" id="server-port" class="form-control shadow-none" placeholder="8080" />
+                                        </div>
+
+                                        <button id="update-server" class="
+                                                btn btn-sm
+                                                shadow-none
+                                                hover-effect
+                                                bg-blue
+                                                text-white
+                                            ">
+                                            Update Server
+                                        </button>
+                                        </div>
+                                    </div>
+
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="data-item mb-2">
+                                    <div class="d-flex align-items-center border list-header active">
+                                        <a class="
+                                            pl-2
+                                            pr-3
+                                            py-2
+                                            d-flex
+                                            align-item-center
+                                            text-decoration-none text-dark
+                                            flex-grow-1
+                                            " data-toggle="collapse" href="#server-setting" role="button" aria-expanded="true"
+                                        aria-controls="server-setting">
+                                        <h6 class="title m-0 d-flex align-items-center">
+                                            PFX Certificate Settings
+                                        </h6>
+                                        </a>
+                                    </div>
+                                    <div id="server-setting" class="collapse show">
+                                        <div class="p-2 border">
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="server-host">PFX File</label>
+                                            </div>
+                                            <input type="text" id="pfxfile" class="form-control shadow-none" />
+                                            <input id="btnAddPFXFile" type="submit" value="Choose" style="float: right" class="
+                                            btn btn-sm
+                                            shadow-none
+                                            hover-effect
+                                            bg-blue
+                                            text-white
+                                            " />
+
+                                        </div>
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="server-host">Domain Name</label>
+                                            </div>
+                                            <input type="text" id="domainName" class="form-control shadow-none" />
+                                            <!-- <input id="btnSaveDomainName" type="submit"value="Save" style="float: right"   class="
+                                            btn btn-sm
+                                            shadow-none
+                                            hover-effect
+                                            bg-blue
+                                            text-white
+                                            "/> -->
+
+                                        </div>
+
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="server-port">Password</label>
+                                            </div>
+                                            <input type="password" id="password" class="form-control shadow-none" />
+                                        </div>
+
+                                        <button id="update-server" class="
+                                                btn btn-sm
+                                                shadow-none
+                                                hover-effect
+                                                bg-blue
+                                                text-white
+                                            ">
+                                            Save
+                                        </button>
+                                        </div>
+                                    </div>
+
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="data-item mb-2">
+                                    <div class="d-flex align-items-center border list-header active">
+                                        <a class="
+                                            pl-2
+                                            pr-3
+                                            py-2
+                                            d-flex
+                                            align-item-center
+                                            text-decoration-none text-dark
+                                            flex-grow-1
+                                            " data-toggle="collapse" href="#server-setting" role="button" aria-expanded="true"
+                                        aria-controls="server-setting">
+                                        <h6 class="title m-0 d-flex align-items-center">
+                                            Monitor Folder Settings
+                                        </h6>
+                                        </a>
+                                    </div>
+                                    <div id="server-setting" class="collapse show">
+                                        <div class="p-2 border">
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="server-host">Folder</label>
+                                            </div>
+                                            <input type="text" id="folder_sync" class="form-control shadow-none" />
+                                            <input id="btnFolderSync" type="submit" value="Choose" style="float: right" class="
+                                            btn btn-sm
+                                            shadow-none
+                                            hover-effect
+                                            bg-blue
+                                            text-white
+                                            " />
+
+                                        </div>
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="server-host">GeoJSON Folder</label>
+                                            </div>
+                                            <input type="text" id="geojson_folder_sync" class="form-control shadow-none" />
+                                            <input id="btnGeoJSONFolderSync" type="submit" value="Choose" style="float: right" class="
+                                            btn btn-sm
+                                            shadow-none
+                                            hover-effect
+                                            bg-blue
+                                            text-white
+                                            " />
+
+                                        </div>
+
+                                        <button id="update-folder-sync" class="
+                                                btn btn-sm
+                                                shadow-none
+                                                hover-effect
+                                                bg-blue
+                                                text-white
+                                            ">
+                                            Save
+                                        </button>
+                                        </div>
+                                    </div>
+
+
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <div id="licence-modal" class="modal fade" data-backdrop="static" data-keyboard="false" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">Update Licence</h5>
+                                <button id="update-cancel" type="button" class="close text-white shadow-none" data-dismiss="modal"
+                                    aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div id="loading-box" class="position-relative">
+                                    <div id="b-spinner" class="position-absolute" style="top:140px;">
+                                    <div class="spinner-border text-info" role="status">
+                                        <span class="sr-only">Loading...</span>
+                                    </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="Key">Licence Key</label>
+                                    <input type="text" class="form-control" id="licence_key" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="title">Enter Company Name</label>
+                                    <input type="text" class="form-control" id="licence_company_name" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="text">Enter Location</label>
+                                    <input type="text" class="form-control" id="licence_location" />
+                                </div>
+
+
+                                </div>
+                                <div class="modal-footer">
+
+                                <button type="button" id="update-licence" class="btn bg-green shadow-none">
+                                    Update Licence
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <!-- <div id="trial-modal" class="modal fade" data-backdrop="static" data-keyboard="false" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">
+                                    Trial Period
+                                </h5>
+
+
+                                </div>
+                                <div class="modal-body">
+                                <h6 style="margin-bottom: 20px;">
+                                    Rapid Serve Local GIS Vector Data as Standard Mapping Services
+
+                                </h6>
+
+                                <div style="margin-bottom: 20px;">
+                                    Serves vector local GIS vector data (ESRI Shapefile, GeoJSON, KML, GPKG Vector features SQLite database and
+                                    PostGIS /PostgreSQL Database tables)
+
+                                </div>
+                                <button id="btn-purchase" class="
+                                                btn btn-sm
+                                                shadow-none
+                                                hover-effect
+                                                bg-blue
+                                                text-white
+                                            ">
+                                    Purchase
+                                </button>
+                                <button id="update-trial" class="
+                                            btn btn-sm
+                                            shadow-none
+                                            hover-effect
+                                            bg-blue
+                                            text-white
+                                            ">
+                                    Start Trial Period
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div> -->
+                        <div id="moreApp-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-database mr-1"></i>
+                                    More Apps
+                                </h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div>
+                                    <table id="more-app-table">
+
+                                    <tbody>
+
+                                    </tbody>
+                                    </table>
+                                </div>
+
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <div id="db-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-database mr-1"></i>
+                                    Manage PostGIS and GPKG
+                                </h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div>
+                                    <div class="data-item mb-2">
+                                    <div class="d-flex align-items-center border list-header active">
+                                        <a class="
+                                            pl-2
+                                            pr-3
+                                            py-2
+                                            d-flex
+                                            align-item-center
+                                            text-decoration-none text-dark
+                                            flex-grow-1
+                                            " data-toggle="collapse" href="#postgis-db-connection" role="button" aria-expanded="false"
+                                        aria-controls="postgis-db-connection">
+                                        <div class="d-flex align-items-center mr-2">
+                                            <img class="file-type-img" src="UI/img/postgis.svg" alt="" />
+                                        </div>
+                                        <h6 class="title m-0 d-flex align-items-center">
+                                            POSTGIS DB CONNECTION
+                                        </h6>
+                                        </a>
+                                    </div>
+                                    <div id="postgis-db-connection" class="collapse">
+                                        <div class="p-2 border">
+                                        <div class="d-flex p-2 mb-2 bg-warning shadow-sm rounded">
+                                            <p class="mb-0 warning-text"><span class="font-weight-bold">NOTE:</span> If you change database
+                                            setting current database services will not be available.</p>
+                                        </div>
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="host">Host</label>
+                                            </div>
+                                            <input type="text" id="host" class="form-control shadow-none" placeholder="localhost" />
+                                        </div>
+
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="port">Port</label>
+                                            </div>
+                                            <input type="text" id="port" class="form-control shadow-none" placeholder="5432" />
+                                        </div>
+
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="database">Database</label>
+                                            </div>
+                                            <input type="text" id="database" class="form-control shadow-none" placeholder="db" />
+                                        </div>
+
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="user">User</label>
+                                            </div>
+                                            <input type="text" id="user" class="form-control shadow-none" placeholder="postgres" />
+                                        </div>
+
+                                        <div class="input-group input-group-sm mb-2">
+                                            <div class="input-group-prepend">
+                                            <label class="input-group-text w-100 m-0" for="password">Password</label>
+                                            </div>
+                                            <input type="password" id="passwordpostgres" class="form-control shadow-none"
+                                            placeholder="password" />
+                                        </div>
+
+                                        <button id="update-database" class="
+                                                btn btn-sm
+                                                shadow-none
+                                                hover-effect
+                                                bg-blue
+                                                text-white
+                                            ">
+                                            Update Database
+                                        </button>
+                                        </div>
+                                    </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="data-item mb-2">
+                                    <div class="d-flex align-items-center border list-header active">
+                                        <a class="
+                                            pl-2
+                                            pr-3
+                                            py-2
+                                            d-flex
+                                            align-item-center
+                                            text-decoration-none text-dark
+                                            flex-grow-1
+                                            " data-toggle="collapse" href="#gpkg-files" role="button" aria-expanded="false"
+                                        aria-controls="gpkg-files">
+                                        <div class="d-flex align-items-center mr-2">
+                                            <img class="file-type-img" src="UI/img/gpkg.png" alt="" />
+                                        </div>
+                                        <h6 class="title m-0 d-flex align-items-center">
+                                            GEOPACKAGE FILES
+                                        </h6>
+                                        </a>
+                                    </div>
+                                    <div id="gpkg-files" class="collapse">
+                                        <div class="p-2 border">
+                                        <div class="d-flex p-2 mb-2 bg-warning shadow-sm rounded">
+                                            <p class="mb-0 warning-text"><span class="font-weight-bold">NOTE:</span> If you delete file, its all
+                                            services will be removed permanently.</p>
+                                        </div>
+                                        <div class="overflow-auto">
+                                            <table id="gpkg-files-table" class="table table-striped mb-0">
+                                            <thead>
+                                                <tr>
+                                                <th scope="col">#</th>
+                                                <th scope="col">Title</th>
+                                                <th scope="col">Source ID</th>
+                                                <th scope="col">Enabled</th>
+                                                <th scope="col">Location</th>
+                                                <th scope="col">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                <th scope="row">1</th>
+                                                <td>Mark</td>
+                                                <td>Otto</td>
+                                                <td>@mdo</td>
+                                                <td>@mdo</td>
+                                                <td class="d-flex align-items-center justify-content-center">
+                                                    <button class='btn btn-sm btn-danger shadow-none'><i class='fas fa-times'></i></button>
+                                                </td>
+                                                </tr>
+                                            </tbody>
+                                            </table>
+                                        </div>
+                                        </div>
+                                    </div>
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <div id="success-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title text-success">Success !</h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div>
+                                    <p id="success-text"></p>
+                                </div>
+                                </div>
+                                <div class="modal-footer">
+                                <button type="button" class="btn bg-green shadow-none" data-dismiss="modal">
+                                    OK
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <div id="error-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">Error Occured !!</h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div>
+                                    <p class="text-danger font-weight-bold" id="error-text"></p>
+                                </div>
+                                </div>
+                                <div class="modal-footer">
+                                <button type="button" class="btn bg-green shadow-none" data-dismiss="modal">
+                                    Close
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <div id="configure-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">Configure</h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div class="form-group">
+                                    <label for="title">Title</label>
+                                    <input type="text" class="form-control" id="wms_title" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="id">ID</label>
+                                    <input type="text" class="form-control" id="wms_id" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="text">WMS Service URL</label>
+                                    <input type="url" class="form-control" id="wms_url" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="text">URL Parameters (key|value)
+                                    </label>
+                                    <div class="params" style="display: flex;flex-direction: row;gap: 30px;margin-bottom: 5px;">
+                                    <input type="text" class="form-control param param-key" id="layers" value="layers" />
+                                    <input type="text" class="form-control param param-value" id="layers_value" value="6" />
+                                    </div>
+                                    <div class="params" style="display: flex;flex-direction: row;gap: 30px;margin-bottom: 5px;">
+                                    <input type="text" class="form-control param param-key" id="format" value="format" />
+                                    <input type="text" class="form-control param param-value" id="format_value" value="image/png" />
+                                    </div>
+                                    <div class="params" style="display: flex;flex-direction: row;gap: 30px;margin-bottom: 5px;">
+                                    <input type="text" class="form-control param param-key" id="transparent" value="transparent" />
+                                    <input type="text" class="form-control param param-value" id="transparent_value" value="true" />
+                                    </div>
+                                    <div class="params" style="display: flex;flex-direction: row;gap: 30px;margin-bottom: 5px;">
+                                    <input type="text" class="form-control param param-key" id="version" value="version" />
+                                    <input type="text" class="form-control param param-value" id="tversion_value" value="1.1.1" />
+                                    </div>
+                                    <div class="params" style="display: flex;flex-direction: row;gap: 30px;margin-bottom: 5px;">
+                                    <input type="text" class="form-control param param-key" id="styles" value="styles" />
+                                    <input type="text" class="form-control param param-value" id="styles_value" value="" />
+                                    </div>
+                                </div>
+
+                                </div>
+                                <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal">
+                                    Cancel
+                                </button>
+                                <button type="button" id="update-layer" class="btn bg-green shadow-none">
+                                    Update Tile Layer
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <div id="upload-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">Configure and Upload</h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div class="form-group">
+                                    <label for="title">Title</label>
+                                    <input type="text" class="form-control" id="title" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="id">ID</label>
+                                    <input type="text" class="form-control" id="id" />
+                                </div>
+                                <div id="csv-params" class="d-none">
+                                    <div class="form-group">
+                                    <label for="longitude">Longitude Column Name</label>
+                                    <input type="text" class="form-control" id="longitude" />
+                                    </div>
+                                    <div class="form-group">
+                                    <label for="latitude">Latitude Column Name</label>
+                                    <input type="text" class="form-control" id="latitude" />
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="upload">Upload File</label>
+                                    <input type="file" class="form-control-file" id="upload" />
+                                </div>
+                                </div>
+                                <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary shadow-none" data-dismiss="modal">
+                                    Cancel
+                                </button>
+                                <button type="button" id="upload-submit" class="btn bg-green shadow-none">
+                                    Upload
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        <div id="delete-service-modal" class="modal fade" tabindex="-1">
+                            <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-dark-blue text-white">
+                                <h5 class="modal-title">Delete!!</h5>
+                                <button type="button" class="close text-white shadow-none" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                </div>
+                                <div class="modal-body">
+                                <div>
+                                    <p>
+                                    If you click <b>OK</b>, service will be deleted permanantly. Are
+                                    you sure ?
+                                    </p>
+                                </div>
+                                </div>
+                                <div class="modal-footer">
+                                <button type="button" id="delete-service-confirm" class="btn bg-danger text-white shadow-none"
+                                    data-dismiss="modal">
+                                    OK
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-light-blue position-sticky fixed-top shadow-sm mb-2">
+                            <div id="topbar" class="container d-flex align-items-center justify-content-between p-3">
+
+                            <div class="d-flex align-items-center justify-content-center">
+                                <a href="https://geodataserver.techmaven.net/" target="_blank"><img class="logo geodatalogo"
+                                    src="UI/img/geodatalogo.png" alt="geodatalogo" /></a>
+
+                            </div>
+                            <div class="trial" id="app-trial">
+                                <div style="display: flex;flex-direction: row;justify-content: center;">
+                                <div style="display:flex;justify-content: center;margin-right: 5px;" id="lbl-trial"></div>
+                                <a id="show-licence" style="color: blueviolet;background-color: transparent;">Upgrade Now</a>
+                                </div>
+                            </div>
+                            <div class="service-class">
+                                <div class="d-flex align-items-start justify-content-start">
+
+                                <div class="dropdown mr-2">
+                                    <button class="
+                                        btn
+                                        dropdown-toggle
+                                        bg-green
+                                        text-white
+                                        shadow-none
+                                        rounded
+                                        started
+                                        d-flex
+                                        align-items-center
+                                        py-2
+                                        top-btn
+                                        hover-effect
+                                        " type="button" data-toggle="dropdown" id="upload-data">
+                                    <i class="fa fa-database"></i><span class="flex-grow-1 text-center font-weight-bold">Add data</span>
+                                    </button>
+                                    <div class="dropdown-menu rounded-0">
+                                    <a class="dropdown-item upload-file" href="#" data-file-type=".zip">Shapefile</a>
+
+                                    <a class="dropdown-item upload-file" href="#" data-file-type=".kml,.kmz">KML / KMZ</a>
+
+                                    <a class="dropdown-item upload-file" href="#" data-file-type=".gpkg">GeoPackage</a>
+
+                                    <a class="dropdown-item upload-file" href="#" data-file-type=".csv">CSV</a>
+                                    <a class="dropdown-item configure-proxy" href="#" data-file-type=".proxy-url">WMS Proxy</a>
+                                    <a class="dropdown-item upload-file" href="#" data-file-type=".mbtiles">MBTiles</a>
+                                    <a class="dropdown-item upload-file" href="#" data-file-type=".json">Catalog JSON</a>
+                                    <a class="dropdown-item upload-file" href="#" data-file-type=".geojson">GeoJSON</a>
+                                    </div>
+                                </div>
+                                <div id="server-toggle">
+                                    <button class="
+                                        btn
+                                        bg-orange
+                                        text-white
+                                        shadow-none
+                                        rounded
+                                        started
+                                        d-flex
+                                        align-items-center
+                                        py-2
+                                        top-btn
+                                        hover-effect
+                                        ">
+                                    <i class="far fa-stop-circle"></i><span class="flex-grow-1 text-center font-weight-bold">Stop</span>
+                                    </button>
+                                </div>
+                                </div>
+                                <!-- <div id="windows-server-service">
+                                <button class="
+                                        btn
+                                        bg-danger
+                                        text-white
+                                        shadow-none
+                                        rounded
+                                        started
+                                        d-flex
+                                        align-items-center
+                                        py-2
+                                        service-btn
+                                        hover-effect
+                                    ">
+                                    <span id="window_service" class="flex-grow-1 text-center font-weight-bold">Start Window as Service</span>
+                                </button>
+                                </div> -->
+                            </div>
+                            </div>
+                            <div class="container d-flex align-items-center justify-content-center py-2" style="margin-bottom: 10px;"
+                            data-link="discoverLink">
+                            <a id="discoverLink" href="Server Offline"
+                                style="margin-right:10px;margin-left: 10px;justify-content:'center';align-items:'center';display:flex;flex-direction:column;">
+                                <button class="flex-grow-1 bg-white text-center font-weight-bold discover-services">
+                                <i class="card-icon fas fa-compass fa"></i>
+                                <span>Discover Services</span>
+                                <img id="qrcode_discover" style="align-self:'center';" width=" 100" height="100">
+                                </button>
+
+                            </a>
+                            <a id="distribution_endpoint" href="Server Offline" style="margin-right:10px;margin-left: 10px;">
+                                <button class="flex-grow-1 bg-white text-center font-weight-bold distribution-endpoint">
+                                <i class="card-icon fas fa-network-wired fa"></i>
+                                <span>Distribution EndPoint</span>
+                                <img id="qrcode_distribution" style="align-self:'center';" width=" 100" height="100">
+                                </button>
+                            </a>
+
+                            <a id="endPointLink" href="Server Offline" style="margin-right:10px;margin-left: 10px;">
+                                <button class="flex-grow-1 bg-white text-center font-weight-bold services-end-point" data-link="endPointLink">
+                                <i class="card-icon fas fa-list fa"></i>
+                                <span>Services End Point</span>
+                                <img id="qrcode_service" style="align-self:'center';" width=" 100" height="100">
+                                </button>
+                            </a>
+
+                            <a id="3dmap-endpoint" href="Server Offline" style="margin-right:10px;margin-left: 10px;">
+                                <button class="flex-grow-1 bg-white text-center font-weight-bold 3dmap-endpoint" data-link="3dmap-endpoint">
+                                <i class="card-icon fas fa-globe fa"></i>
+                                <span>Open 3D Map</span>
+                                <img id="qrcode_3dmap" style="align-self:'center';" width=" 100" height="100">
+                                </button>
+                            </a>
+
+
+
+                            <a id="map-endpoint" href="Server Offline" style="margin-right:10px;margin-left: 10px;">
+                                <button class="flex-grow-1 bg-white text-center font-weight-bold map-endpoint" data-link="map-endpoint">
+                                <i class="card-icon fas fa-map fa"></i>
+                                <span>Open 2D Map</span>
+                                <img id="qrcode_2dmap" style="align-self:'center';" width=" 100" height="100">
+                                </button>
+                            </a>
+                            <a id="catalog-generator" href="Server Offline" style="margin-right:10px;margin-left: 10px;">
+                                <button class="flex-grow-1 bg-white text-center font-weight-bold catalog-generator"
+                                data-link="catalog-generator">
+                                <i class="card-icon fas fa-plus fa"></i>
+                                <span>Catalog Generator</span>
+                                <img id="qrcode_catalog" style="align-self:'center';" width=" 100" height="100">
+                                </button>
+                            </a>
+                            <a id="earth-catalog-generator" href="Server Offline" style="margin-right:10px;margin-left: 10px;">
+                                <button class="flex-grow-1 bg-white text-center font-weight-bold earth-catalog-generator"
+                                data-link="earth-catalog-generator">
+                                <i class="card-icon fas fa-plus fa"></i>
+                                <span>3D Catalog Generator</span>
+                                <img id="qrcode_3dcatalog" style="align-self:'center';" width=" 100" height="100">
+                                </button>
+                            </a>
+                            </div>
+
+
+                        </div>
+
+                        </div>
+
+                        <div class="d-flex flex-column main-section">
+                            <div class="container d-flex align-items-center justify-content-between py-2" style="margin-bottom: 30px;">
+                            <button class="btn bg-blue text-white shadow-none hover-effect manage-db">
+                                <i class="fas fa-database mr-1"></i>
+                                <span>Manage PostGIS and GPKG</span>
+                            </button>
+                            <div>
+                                <button class="btn bg-blue text-white shadow-none hover-effect more-apps">
+                                <i class="fas fa-info mr-1"></i>
+                                <span>More Apps</span>
+                                </button>
+                                <button class="btn bg-blue text-white shadow-none hover-effect settings">
+                                <i class="fas fa-cog mr-1"></i>
+                                <span>Settings</span>
+                                </button>
+                            </div>
+                            </div>
+                            <div id="spinner-box" class="position-relative">
+                            <div id="b-spinner" class="position-absolute">
+                                <div class="spinner-border text-info" role="status">
+                                <span class="sr-only">Loading...</span>
+                                </div>
+                            </div>
+                            </div>
+
+                            <div id="data-list" class="data-list container"></div>
+                        </div>
+
+                        <div class="version-info w-100 d-flex flex-column bg-light">
+                            <hr class="w-100 m-0" />
+                            <div class="
+                                px-4
+                                py-3
+                                container
+                                d-flex
+                                align-items-center
+                                justify-content-between
+                                ">
+                            <a href="https://techmaven.net/" target="_blank"><img class="logo tmglogo" src="UI/img/tmglogo.png"
+                                alt="tmglogo" /></a>
+                            <a href="http://geodataserver.techmaven.net/release-notes" target="_blank" class="m-0 hover-effect">version
+                                1.1</a>
+                            </div>
+                        </div>
+
+                        <div id="templates" class="d-none">
+                            <div id="item-template">
+                            <div class="data-item mb-2">
+                                <div class="d-flex justify-content-between border list-header">
+                                <div class="pl-2 d-flex align-items-center">
+                                    <img class="file-type-img" src="UI/img/postgis.png" alt="" />
+                                </div>
+                                <div class="pl-2 pr-3 py-2 flex-grow-1">
+                                    <h6 class="title m-0">Shapefile</h6>
+                                    <p class="description m-0">Lorem ipsum dolor sit amet.</p>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="layer-setting-buttons d-flex align-items-center mr-2">
+                                    <button class="
+                                            enable-disable-service
+                                            btn btn-sm
+                                            bg-orange
+                                            text-white
+                                            shadow-none
+                                            rounded-0
+                                            hover-effect
+                                        ">
+                                        Disabled
+                                    </button>
+                                    <button class="
+                                            delete-service
+                                            btn btn-sm
+                                            bg-danger
+                                            text-white
+                                            shadow-none
+                                            rounded-0
+                                            hover-effect
+                                        ">
+                                        Delete
+                                    </button>
+                                    </div>
+                                    <a class="
+                                        btn btn-sm
+                                        shadow-none
+                                        px-4
+                                        rounded-0
+                                        bg-transparent
+                                        toggle-endpoints-view
+                                        color-blue
+                                        d-flex
+                                        align-items-center
+                                        " data-toggle="collapse" href="#endpoints-view" role="button" aria-expanded="false"
+                                    aria-controls="endpoints-view">
+                                    <i class="fas fa-chevron-right fa-2x"></i>
+                                    </a>
+                                </div>
+                                </div>
+                                <div id="endpoints-view" class="collapse">
+                                <ul class="list-group rounded-0"></ul>
+                                </div>
+                            </div>
+                            </div>
+                            <div id="endpoint-template">
+                            <li class="
+                                    list-group-item
+                                    p-0
+                                    d-flex
+                                    justify-content-between
+                                    align-items-center
+                                    border
+                                ">
+                                <span class="pl-3">
+                                <img class="service-type-img" src="UI/img/featureserver.png" alt="" />
+                                </span>
+                                <span class="endpoint pl-1 pr-3 py-2 flex-grow-1">
+                                http://localhost:8080/shp/test/FeatureServer/0/query
+                                </span>
+                                <div class="wrapper">
+                                <div class="icon copy-icon shadow-sm">
+                                    <div class="tooltip">click to copy!</div>
+                                    <button class="
+                                        btn btn-sm
+                                        bg-transparent
+                                        rounded-0
+                                        shadow-none
+                                        click-to-copy
+                                        color-blue
+                                        pointer
+                                        ">
+                                    <i class="far fa-clone"></i>
+                                    </button>
+                                </div>
+                                </div>
+                            </li>
+                            </div>
+                        </div>
+            <!-- ... -->
+        </div>
+
+       <!-- DuckDB Tab -->
+        <div class="tab-pane fade show active" id="duckdb" role="tabpanel" aria-labelledby="duckdb-tab">
+            <div class="duckdb-container py-4">
+                <div class="container">
+                    <div class="row mb-4 align-items-center">
+                        <div class="col">
+                            <h2 class="mb-0">
+                                <i class="fas fa-database text-primary mr-3"></i>
+                                DuckDB Data Engine
+                            </h2>
+                            <p class="text-muted mb-0">  
+                                Process and analyze your data using DuckDB's powerful analytical engine
+                            </p>
+                        </div>
+                        <div class="col-auto">
+                            <div class="dropdown">
+                                <button class="btn btn-primary-modern dropdown-toggle" type="button" id="dbManagementDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fas fa-database mr-2"></i> Database Management
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-right" aria-labelledby="dbManagementDropdown">
+                                    <button class="dropdown-item" id="createNewDb">
+                                        <i class="fas fa-plus-circle text-success mr-2"></i> Create New Database
+                                    </button>
+                                    <button class="dropdown-item" id="importDb">
+                                        <i class="fas fa-file-import text-primary mr-2"></i> Import Database
+                                    </button>
+                                    <button class="dropdown-item" id="exportDb">
+                                        <i class="fas fa-file-export text-info mr-2"></i> Export Database
+                                    </button>
+                                    <div class="dropdown-divider"></div>
+                                    <button class="dropdown-item" id="manageConnections">
+                                        <i class="fas fa-plug text-warning mr-2"></i> Manage Connections
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+  
+                <div class="row">
+                    <!-- File Upload Method -->
+                    <div class="col-md-6 mb-4">
+                        <div class="method-card card h-100">
+                            <div class="card-body text-center p-4">
+                                <div class="method-icon file-upload-icon mx-auto">
+                                    <i class="fas fa-upload"></i>
+                                </div>
+                                <h4 class="card-title mb-3">Upload File</h4>
+                                <p class="card-text text-muted mb-4">
+                                    Drag and drop your files or browse to select from your computer
+                                </p>
+                                
+                                <div class="upload-zone d-flex flex-column align-items-center justify-content-center p-4" id="fileDropZone">
+                                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                    <h5 class="mb-2">Drop files here</h5>
+                                    <p class="text-muted mb-3">or click to browse</p>
+                                    <input type="file" id="fileInput" class="d-none" multiple accept=".csv,.json,.parquet,.xlsx,.tsv">
+                                    <button id="browseButton" class="btn btn-primary-modern btn-modern" onclick="document.getElementById('fileInput').click()">
+                                        <i class="fas fa-folder-open mr-2"></i>
+                                        Browse Files
+                                    </button>
+                                </div>
+                                
+                                <div id="fileInfo" class="file-info d-none">
+                                    <h6>Selected Files:</h6>
+                                    <div id="fileList"></div>
+                                    
+                                    <!-- CSV Parameters Section -->
+                                    <div class="parameter-section" id="csvParameters" style="display: none;">
+                                        <h6 class="mb-3">CSV Configuration</h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="csvId" class="font-weight-bold">
+                                                        Dataset ID
+                                                    </label>
+                                                    <input type="text" class="form-control form-control-modern" id="csvId" 
+                                                        placeholder="dataset_001">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="csvName" class="font-weight-bold">
+                                                        Dataset Name
+                                                    </label>
+                                                    <input type="text" class="form-control form-control-modern" id="csvName" 
+                                                        placeholder="Points of Interest">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="longitudeColumn" class="font-weight-bold">
+                                                        Longitude Column
+                                                    </label>
+                                                    <input type="text" class="form-control form-control-modern" id="longitudeColumn" 
+                                                        placeholder="X, longitude, lng, lon">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label for="latitudeColumn" class="font-weight-bold">
+                                                        Latitude Column
+                                                    </label>
+                                                    <input type="text" class="form-control form-control-modern" id="latitudeColumn" 
+                                                        placeholder="Y, latitude, lat">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <div class="form-group">
+                                                    <label for="outputFormat" class="font-weight-bold">
+                                                        Output Format
+                                                    </label>
+                                                    <select class="form-control form-control-modern" id="outputFormat">
+                                                        <option value="gpkg">GeoPackage (.gpkg)</option>
+                                                        <option value="csv">CSV (.csv)</option>
+                                                        <option value="shp">Shapefile (.shp)</option>
+                                                        <option value="kml">KML/KMZ (.kml/.kmz)</option>
+                                                        <option value="geojson">GeoJSON (.geojson)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <button class="btn btn-primary-modern btn-modern mt-3" id="processFiles">
+                                        <i class="fas fa-cogs mr-2"></i>
+                                        Process Files
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- URL Fetch Method -->
+                    <div class="col-md-6 mb-4">
+                        <div class="method-card card h-100">
+                            <div class="card-body text-center p-4">
+                                <div class="method-icon url-fetch-icon mx-auto">
+                                    <i class="fas fa-link"></i>
+                                </div>
+                                <h4 class="card-title mb-3">Fetch from URL</h4>
+                                <p class="card-text text-muted mb-4">
+                                    Enter a remote URL to fetch and process data directly
+                                </p>
+                                
+                                <div class="text-left">
+                                    <div class="form-group">
+                                        <label for="dataUrl" class="font-weight-bold">
+                                            <i class="fas fa-globe mr-2"></i>Data URL
+                                        </label>
+                                        <input type="url" class="form-control form-control-modern" id="dataUrl" 
+                                               placeholder="https://example.com/data.csv">
+                                        <small class="form-text text-muted">
+                                            Supports CSV, JSON, Parquet, and other formats
+                                        </small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="urlHeaders" class="font-weight-bold">
+                                            <i class="fas fa-key mr-2"></i>Headers (Optional)
+                                        </label>
+                                        <textarea class="form-control form-control-modern" id="urlHeaders" rows="3" 
+                                                  placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'></textarea>
+                                        <small class="form-text text-muted">
+                                            JSON format for custom headers
+                                        </small>
+                                    </div>
+                                    
+                                    <button class="btn btn-secondary-modern btn-modern btn-block" id="fetchUrl">
+                                        <i class="fas fa-download mr-2"></i>
+                                        Fetch Data
+                                    </button>
+                                </div>
+                                
+                                <div id="urlInfo" class="url-info d-none">
+                                    <h6><i class="fas fa-link mr-2"></i>URL Status:</h6>
+                                    <div id="urlStatus"></div>
+                                    <button class="btn btn-secondary-modern btn-modern mt-3" id="processUrl">
+                                        <i class="fas fa-cogs mr-2"></i>
+                                        Process Data
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                    
+                    <!-- Processing Indicator -->
+                    <div class="row processing-indicator" id="processingIndicator">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body text-center p-4">
+                                    <div class="spinner-border text-primary mb-3" role="status">
+                                        <span class="sr-only">Processing...</span>
+                                    </div>
+                                    <h5>Processing your data...</h5>
+                                    <p class="text-muted">Please wait while DuckDB analyzes your dataset</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Results Section -->
+                    <div class="row" id="resultsSection" style="display: none;">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-chart-bar mr-2"></i>
+                                        Analysis Results
+                                    </h5>
+                                    <button id="closeResults" class="btn btn-sm btn-light">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <div id="resultsContent">
+                                        <!-- Results will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+
+  <script src="UI/lib/jquery/jquery-3.4.1.js"></script>
+  <script src="UI/lib/fontawesome/js/all.min.js"></script>
+  <script src="UI/lib/bootstrap/bootstrap.bundle.js"></script>
+
+  <script>
+    var trialJSON = {}
+    var dayLeft = '3 days'
+    window.server_url = ""
+    var isTrialExpired;
+    var isFreeVersion;
+    //window.server_url = window.server.getServerUrl();
+
+    window.server.getPFXCertificatePath((event, data) => {
+      $("#pfxfile").val(event);
+
+    });
+
+    window.server.getSyncFolderPath((event, data) => {
+      if (event.isGeoJSONFolder == false) {
+        $("#folder_sync").val(event.path);
+      } else {
+        $("#geojson_folder_sync").val(event.path);
+      }
+
+
+    });
+
+
+    window.server.checkAppTrial()
+
+    window.server.getQRCode((event, data) => {
+      console.log("New QR", event.code);
+      $("#qrcode_discover").attr("src", event.data.discover);
+      $("#qrcode_distribution").attr("src", event.data.distribution);
+      $("#qrcode_service").attr("src", event.data.service);
+      $("#qrcode_3dmap").attr("src", event.data._3dmap);
+      $("#qrcode_2dmap").attr("src", event.data.map);
+      $("#qrcode_catalog").attr("src", event.data.catalog_generator);
+      $("#qrcode_3dcatalog").attr("src", event.data.earthexplorer_cataloggenerator);
+
+    })
+
+    window.server.checkProVersion((event, data) => {
+
+      window.isFreeVersion = event.isFreeVersion;
+      window.isTrialExpired = event.isTrialExpired;
+      if (window.isFreeVersion == false) {
+        $("#app-trial").remove();
+      } else {
+
+        if (event.isTrialExpired == false) {
+          $("#lbl-trial").text("You are using free trial version of app.");
+        } else {
+          $("#update-cancel").remove();
+          $("#lbl-trial").text("Your trial period has been expired.");
+          $("#loading-box").addClass("d-none");
+          $("#licence-modal").modal("show");
+        }
+      }
+    });
+    window.server.showUpdateLicense((event, data) => {
+
+      $("#loading-box").addClass("d-none");
+      $("#licence-modal").modal("show");
+    });
+
+  </script>
+
+  <script src="UI/js/copy.text.helper.js"></script>
+  <script src="UI/js/main.js"></script>
+
+  <script>
+
+  </script>
+</body>
+
+</html>

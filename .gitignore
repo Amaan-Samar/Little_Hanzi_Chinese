@@ -30,3 +30,6 @@ src/views/test.vue
 *.sw?
 
 *.tsbuildinfo
+
+practice/*
+data.txt

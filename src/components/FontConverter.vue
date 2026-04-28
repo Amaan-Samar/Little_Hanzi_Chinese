@@ -1,5 +1,15 @@
 <template>
   <div class="converter-wrapper">
+    <!-- Header with Logo and Settings -->
+    <div class="app-header">
+      <div class="logo-section">
+        <h1 class="logo">LittleHanzi</h1>
+      </div>
+      <button class="settings-icon-btn" @click="openSettingsModal" title="Settings">
+        <Settings :size="24" />
+      </button>
+    </div>
+
     <div class="main-content">
       <div class="input-display-row">
         <!-- Chinese Text Input -->
@@ -9,8 +19,7 @@
               v-model="inputText" 
               placeholder="Enter Chinese text here..." 
               class="text-input w-full" 
-              @input="adjustHeight" 
-              @focus="setActiveTextarea('chinese')"
+              @input="adjustHeight"
               ref="chineseTextarea"
             ></textarea>
             <button 
@@ -22,7 +31,7 @@
               <EditIcon :size="16" />
             </button>
           </div>
-          <button @click="clearOrPasteText('chinese')" class="paste-btn">
+          <button @click="clearOrPasteText('chinese')" class="action-btn">
             {{ inputText.trim() ? 'Clear' : 'Paste' }}
           </button>
         </div>
@@ -34,8 +43,7 @@
               v-model="englishText" 
               placeholder="Enter English translation here..." 
               class="text-input w-full english-input" 
-              @input="adjustEnglishHeight" 
-              @focus="setActiveTextarea('english')"
+              @input="adjustEnglishHeight"
               ref="englishTextarea"
             ></textarea>
             <button 
@@ -47,12 +55,11 @@
               <EditIcon :size="16" />
             </button>
           </div>
-          <button @click="clearOrPasteText('english')" class="paste-btn">
+          <button @click="clearOrPasteText('english')" class="action-btn">
             {{ englishText.trim() ? 'Clear' : 'Paste' }}
           </button>
         </div>
       </div>
-
 
       <!-- Edit Modal -->
       <EditModal
@@ -65,24 +72,14 @@
         @save="saveEditModalContent"
       />
 
-      <!-- New Control Bar -->
-      <!-- <ControlBar
-        v-if="inputText.trim()"
-        :showPinyin="showPinyin"
-        :showEnglish="showEnglish"
-        :showChinese="showChinese"
-        :displayOrder="displayOrder"
-        :fontSize="fontSize"
-        :selectedFont="selectedFont"
-        @clear="clearAllText"
-        @toggle-pinyin="togglePinyin"
-        @toggle-english="toggleEnglish"
-        @toggle-chinese="toggleChinese"
-        @toggle-order="toggleOrder"
-        @update-font-size="updateFontSize"
-        @update-selected-font="updateSelectedFont"
-        @reset-settings="resetSettings"
-      /> -->
+      <!-- Settings Modal -->
+      <SettingsModal
+        :isOpen="isSettingsModalOpen"
+        :settings="settings"
+        @close="closeSettingsModal"
+        @save="saveSettings"
+        @reset="resetToDefaults"
+      />
 
       <div v-if="inputText.trim() && (showEnglish || showChinese)" class="comparison-section">
         <div class="comparison-display relative">
@@ -151,18 +148,24 @@
 
       <!-- Empty state when both English and Chinese are hidden -->
       <div v-else-if="inputText.trim() && !showEnglish && !showChinese" class="empty-state">
-        <p>Both English and Chinese paragraphs are hidden. Toggle them on using the control bar.</p>
+        <p>Both English and Chinese paragraphs are hidden. Enable them in settings.</p>
       </div>
 
+      <!-- Quick action bar for clear -->
+      <div v-if="inputText.trim()" class="quick-actions">
+        <button @click="clearAllText" class="clear-all-btn">
+          Clear All Text
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { Edit as EditIcon } from 'lucide-vue-next'
+import { Edit as EditIcon, Settings } from 'lucide-vue-next'
 import EditModal from './EditModal.vue'
-import ControlBar from './ControlBar.vue';
-import { ref, computed, watch, reactive} from 'vue';
+import SettingsModal from './SettingsModal.vue';
+import { ref, computed, watch } from 'vue';
 import { pinyin } from 'pinyin-pro';
 import { useSettings } from '../composables/useSettings'
 
@@ -170,7 +173,9 @@ import { useSettings } from '../composables/useSettings'
 export default {
   components: {
     EditModal,
-    ControlBar,
+    SettingsModal,
+    EditIcon,
+    Settings,
   },
   name: 'FontConverter',
   setup() {
@@ -183,20 +188,50 @@ export default {
       displayOrder,
       resetSettings
     } = useSettings()
+    
     const inputText = ref('');
     const englishText = ref('');
-    // const fontSize = ref(15);
-    // const selectedFont = ref('NotoSansSC');
     const chineseTextarea = ref(null);
     const englishTextarea = ref(null);
-    const activeTextarea = ref('chinese');
-    const copiedStates = reactive({});
-    const COPIED_ICON_DURATION = 3000;
+    const isSettingsModalOpen = ref(false);
 
     const isEditModalOpen = ref(false)
-    const editModalType = ref('chinese') // 'chinese' or 'english'
+    const editModalType = ref('chinese')
     const editModalTitle = computed(() => editModalType.value === 'chinese' ? 'Chinese Text' : 'English Translation')
     const editModalContent = computed(() => editModalType.value === 'chinese' ? inputText.value : englishText.value)
+
+    // Settings object for modal
+    const settings = computed(() => ({
+      fontSize: fontSize.value,
+      selectedFont: selectedFont.value,
+      showPinyin: showPinyin.value,
+      showEnglish: showEnglish.value,
+      showChinese: showChinese.value,
+      displayOrder: displayOrder.value
+    }))
+
+    const openSettingsModal = () => {
+      isSettingsModalOpen.value = true
+    }
+
+    const closeSettingsModal = () => {
+      isSettingsModalOpen.value = false
+    }
+
+    const saveSettings = (newSettings) => {
+      fontSize.value = newSettings.fontSize
+      selectedFont.value = newSettings.selectedFont
+      showPinyin.value = newSettings.showPinyin
+      showEnglish.value = newSettings.showEnglish
+      showChinese.value = newSettings.showChinese
+      displayOrder.value = newSettings.displayOrder
+      closeSettingsModal()
+    }
+
+    const resetToDefaults = () => {
+      resetSettings()
+      closeSettingsModal()
+    }
 
     const openEditModal = (type) => {
       editModalType.value = type
@@ -216,36 +251,7 @@ export default {
       closeEditModal()
     }
 
-    // And add these new methods to pass to ControlBar:
-    const updateFontSize = (newSize) => {
-      fontSize.value = newSize
-    }
-    
-    const updateSelectedFont = (newFont) => {
-      selectedFont.value = newFont
-    }
-
-    const togglePinyin = () => {
-      showPinyin.value = !showPinyin.value;
-    };
-
-    const toggleEnglish = () => {
-      showEnglish.value = !showEnglish.value;
-    };
-
-    const toggleChinese = () => {
-      showChinese.value = !showChinese.value;
-    };
-
-    const toggleOrder = () => {
-      displayOrder.value = displayOrder.value === 'en-cn' ? 'cn-en' : 'en-cn';
-    };
-
-    const setActiveTextarea = (type) => {
-      activeTextarea.value = type;
-    };
-
-    // Updated fonts using Google Fonts
+    // Font configurations
     const fonts = {
       NotoSansSC: "'Noto Sans SC', 'Inter', sans-serif",
       NotoSerifSC: "'Noto Serif SC', 'Georgia', serif",
@@ -271,7 +277,7 @@ export default {
         .filter(para => para);
       
       const result = {};
-      const chineseSegmentKeys = Object.keys(chineseSegments);
+      const chineseSegmentKeys = chineseSegments ? Object.keys(chineseSegments) : [];
       
       englishParagraphs.forEach((paragraph, index) => {
         if (index < chineseSegmentKeys.length) {
@@ -286,22 +292,10 @@ export default {
       return breakEnglishText(englishText.value, comparisonData.value);
     });
 
-    const textBlocks = computed(() => {
-      if (!inputText.value) return [];
-
-      const sentences = inputText.value.match(/[^。!?！？]+[。!?！？]+/g) || [];
-      const remainingText = inputText.value.match(/[^。!?！？]+$/);
-
-      if (remainingText) {
-        sentences.push(remainingText[0]);
-      }
-      return sentences.filter(sentence => sentence);
-    });
- 
     const pasteFromClipboard = async (target = null) => {
       try {
         const clipboardText = await navigator.clipboard.readText();
-        const targetType = target || activeTextarea.value;
+        const targetType = target || 'chinese';
         
         if (targetType === 'chinese') {
           inputText.value = clipboardText;
@@ -347,23 +341,6 @@ export default {
       } else {
         pasteFromClipboard(type);
       }
-    };
-
-    const splitIntoLines = text => {
-      const newlineParts = text.split(/\r?\n/);
-      
-      return newlineParts.flatMap(part => {
-        const commaParts = part.split('，');
-        return commaParts
-          .map((line, index) => {
-            if (index < commaParts.length - 1 || part.endsWith('，')) {
-              return line.trim() + '，';
-            } else {
-              return line.trim();
-            }
-          })
-          .filter(line => line);
-      });
     };
 
     const flattenBlockLines = (blockObject) => {
@@ -549,112 +526,161 @@ export default {
     watch(inputText, adjustHeight);
     watch(englishText, adjustEnglishHeight);
 
-    const copyToClipboard = (text, buttonId) => {
-      navigator.clipboard.writeText(text)
-        .then(() => {
-          copiedStates[buttonId] = true;
-          setTimeout(() => {
-            copiedStates[buttonId] = false;
-          }, COPIED_ICON_DURATION);
-        })
-        .catch(err => {
-          console.error('Failed to copy text: ', err);
-        });
-    };
-    
-    const showCopySuccess = () => {
-      const toast = document.createElement('div');
-      toast.textContent = 'Copied to clipboard!';
-      toast.className = 'copy-toast';
-      document.body.appendChild(toast);
-      
-      setTimeout(() => {
-        toast.classList.add('show');
-        setTimeout(() => {
-          toast.classList.remove('show');
-          setTimeout(() => {
-            document.body.removeChild(toast);
-          }, 300);
-        }, 2000);
-      }, 10);
-    };
-    
-    const getAllText = () => {
-      let allText = '';
-      if (comparisonData.value) {
-        for (const sentenceId in comparisonData) {
-          const lines = comparisonData[sentenceId];
-          for (const line of lines) {
-            allText += line + '\n';
-          }
-        }
-      }
-      return allText;
-    };
-
-    const getBlockText = (lines) => {
-      return Object.values(lines).map(line => line.text).join('，');
-    };
-
     return {
-      clearOrPasteText,
-      pasteFromClipboard,
-      copyToClipboard,
-      showCopySuccess,
-      getAllText,
-      getBlockText,
+      // Data
       inputText,
       englishText,
       selectedFont,
       fontSize,
-      getFontFamily,
-      textBlocks,
-      comparisonData,
-      englishSegments,
-      fonts,
-      splitIntoLines,
-      isPunctuation,
-      getPinyinForChar,
-      adjustHeight,
-      adjustEnglishHeight,
-      chineseTextarea,
-      englishTextarea,
-      copiedStates,
-      clearText,
-      clearAllText,
-      flattenBlockLines,
       showPinyin,
       showEnglish,
       showChinese,
       displayOrder,
-      togglePinyin,
-      toggleEnglish,
-      toggleChinese,
-      toggleOrder,
-      setActiveTextarea,
-      activeTextarea,
-
-      updateFontSize,
-      updateSelectedFont,
-      resetSettings,
-
+      
+      // Computed
+      getFontFamily,
+      comparisonData,
+      englishSegments,
+      settings,
+      
+      // Methods
+      clearOrPasteText,
+      clearAllText,
+      flattenBlockLines,
+      adjustHeight,
+      adjustEnglishHeight,
+      
+      // Refs
+      chineseTextarea,
+      englishTextarea,
+      
+      // Modal related
       EditIcon,
+      Settings,
       isEditModalOpen,
       editModalTitle,
       editModalContent,
       openEditModal,
       closeEditModal,
       saveEditModalContent,
+      
+      // Settings modal
+      isSettingsModalOpen,
+      openSettingsModal,
+      closeSettingsModal,
+      saveSettings,
+      resetToDefaults,
     };
   },
 };
 </script>
 
 <style scoped>
+.app-header {
+  position: sticky;
+  top: 0;
+  background: white;
+  border-bottom: 1px solid #e9ecef;
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #4a6cf7 0%, #6c5ce7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+.settings-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #495057;
+}
+
+.settings-icon-btn:hover {
+  background: #f8f9fa;
+  transform: rotate(90deg);
+}
+
+.main-content {
+  display: block;
+}
+
+.input-display-row {
+  margin: 20px auto;
+  padding: 5px;
+  display: block;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.text-section {
+  width: 100%;
+  padding: 0 1rem;
+  margin-bottom: 20px;
+}
 
 .input-wrapper {
   position: relative;
   width: 100%;
+}
+
+.text-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 12px;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  font-size: 14px;
+  transition: all 0.2s;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #4a6cf7;
+  box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.1);
+}
+
+.action-btn {
+  padding: 8px 20px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: #f8f9fa;
+  border-color: #4a6cf7;
+  color: #4a6cf7;
 }
 
 .edit-btn {
@@ -681,15 +707,28 @@ export default {
   transform: scale(1.05);
 }
 
-@media (max-width: 768px) {
-  .edit-btn {
-    padding: 8px;
-  }
-  
-  .edit-btn svg {
-    width: 18px;
-    height: 18px;
-  }
+.quick-actions {
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.clear-all-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-all-btn:hover {
+  background: #fecaca;
+  transform: translateY(-1px);
 }
 
 .line-characters-and-pinyin {
@@ -716,43 +755,11 @@ export default {
   outline-color: #5dade2 !important;
 }
 
-.english-input::placeholder {
-  color: #1f1f20 !important;
-}
-
 .empty-state {
   text-align: center;
-  padding: 40px;
-  color: #666;
+  padding: 60px 20px;
+  color: #868e96;
   font-style: italic;
-}
-
-.paste-btn {  
-  padding: 8px 16px;
-  margin-top: 5px;
-  font-size: 14px;
-  background-color: white;
-  font-weight: 800;
-  border-radius: 4px;
-  box-shadow: rgb(216, 215, 215) 0 10px 20px -10px;
-  color: black;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 1;
-  outline: 0 solid transparent;
-  text-align: center;
-  text-decoration: none;
-  transition: all 250ms;
-  border: none;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
-}
-
-.paste-btn:hover {
-  background-color: #c9cacb;
 }
 
 .relative {
@@ -761,51 +768,14 @@ export default {
 
 .converter-wrapper {
   width: 100%;
-}
-
-.controls-container {
-  display: flex;
-  max-width: 1200px;
-  margin: 0 auto;
-  gap: 1rem;
-  justify-items: center;
-}
-
-.main-content {
-  display: block;
-}
-
-.input-display-row {
-  margin: 5px;
-  padding: 5px;
-  display: block;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.text-section {
-  width: 100%;
-  padding: 0 0.2rem;
-  margin-bottom: 15px;
-}
-
-.text-input {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border-color: #7a90ff87;
-  font-size: 12px;
-}
-
-.text-display {
-  border-radius: 4px;
-  white-space: pre-wrap;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
 .comparison-section {
   max-width: 1200px;
   margin: 0 auto; 
-  padding: 0 0.5rem;
+  padding: 0 1rem;
 }
 
 .comparison-display {
@@ -813,80 +783,57 @@ export default {
 }
 
 .comparison-block {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .line-container {
-  background-color: rgba(255, 255, 255, 0.3);
-  display: flex;
-  flex-direction: column;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .text-line {
   display: block;
   flex-wrap: wrap;
-  background-color: rgba(256, 256, 256, 0.4);
-  border-radius: 0.25rem;
-  padding: 0.2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.select-input {
-  padding: 0.5rem;
-  border-radius: 0.25rem;
+.character {
+  display: inline-block;
+  margin-right: 2px;
+  font-weight: 600;
 }
 
-textarea::placeholder {
-  border-color: #7a91ff;
-  color: #1f1f20;
-}
-
-textarea::-webkit-input-placeholder {
-  border-color: #7a91ff;
-  color: #1f1f20;
-}
-
-textarea::-moz-placeholder {
-  border-color: #7a91ff;
-  color: #1f1f20;
-  opacity: 1;
-}
-
-textarea:-ms-input-placeholder {
-  border-color: #7a91ff;
-  color: #1f1f20;
-}
-
-textarea:-moz-placeholder {
-  border-color: #7a91ff;
-  color: #1f1f20;
-  opacity: 1;
-}
-
-@media (max-width: 1024px) {
-  .input-display-row {
-    grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
-  }
-
-  .character-column {
-    min-width: auto;
-  }
+.pinyin {
+  display: inline-block;
+  margin-right: 4px;
+  color: #6c757d;
 }
 
 @media (max-width: 768px) {
-  .controls-container {
-    flex-direction: row;
-    align-items: flex-start;
+  .app-header {
+    padding: 8px 16px;
   }
-
-  .text-input,
-  .text-display,
-  .comparison-display {
-    min-height: auto;
+  
+  .logo {
+    font-size: 18px;
   }
-
-  .comparison-block {
-    margin-bottom: 0.5rem;
+  
+  .input-display-row {
+    margin: 10px auto;
+  }
+  
+  .text-section {
+    padding: 0 0.5rem;
+  }
+  
+  .comparison-section {
+    padding: 0 0.5rem;
+  }
+  
+  .line-container {
+    padding: 12px;
   }
 }
 </style>

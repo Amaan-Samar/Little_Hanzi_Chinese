@@ -32,3 +32,4 @@ src/views/test.vue
 *.tsbuildinfo
 
 practice/*
+data.txt

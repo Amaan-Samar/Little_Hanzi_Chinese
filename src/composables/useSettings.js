@@ -8,7 +8,16 @@ export function useSettings() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
-        return JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        // Ensure all properties exist (for backwards compatibility)
+        return {
+          fontSize: parsed.fontSize ?? 15,
+          selectedFont: parsed.selectedFont ?? 'NotoSansSC',
+          showPinyin: parsed.showPinyin ?? true,
+          showEnglish: parsed.showEnglish ?? true,
+          showChinese: parsed.showChinese ?? true,
+          displayOrder: parsed.displayOrder ?? 'en-cn'
+        }
       }
     } catch (error) {
       console.error('Failed to load settings:', error)

@@ -66,7 +66,7 @@
         :isOpen="isEditModalOpen"
         :title="editModalTitle"
         :content="editModalContent"
-        :fontSize="fontSize"
+        :fontSize="Number(fontSize)"
         :fontFamily="getFontFamily"
         @close="closeEditModal"
         @save="saveEditModalContent"
@@ -151,28 +151,40 @@
         <p>Both English and Chinese paragraphs are hidden. Enable them in settings.</p>
       </div>
 
-      <!-- Quick action bar for clear -->
       <div v-if="inputText.trim()" class="quick-actions">
-        <button @click="clearAllText" class="clear-all-btn">
+        <button @click="requestClearAll" class="clear-all-btn">
           Clear All Text
         </button>
       </div>
     </div>
+
+    <!-- Confirmation Modal -->
+    <ConfirmModal
+      :isOpen="showConfirmModal"
+      title="Clear All Text"
+      message="Are you sure you want to clear all Chinese and English text? This action cannot be undone."
+      confirmText="Yes, Clear All"
+      cancelText="Cancel"
+      @confirm="confirmClearAll"
+      @cancel="cancelClearAll"
+    />
   </div>
 </template>
 
 <script>
-import { Edit as EditIcon, Settings } from 'lucide-vue-next'
-import EditModal from './EditModal.vue'
+import { Edit as EditIcon, Settings } from 'lucide-vue-next';
+import EditModal from './EditModal.vue';
+import ConfirmModal from './ConfirmModal.vue';
 import SettingsModal from './SettingsModal.vue';
 import { ref, computed, watch } from 'vue';
 import { pinyin } from 'pinyin-pro';
-import { useSettings } from '../composables/useSettings'
+import { useSettings } from '../composables/useSettings';
 
 
 export default {
   components: {
     EditModal,
+    ConfirmModal,
     SettingsModal,
     EditIcon,
     Settings,
@@ -192,6 +204,7 @@ export default {
     const inputText = ref('');
     const englishText = ref('');
     const chineseTextarea = ref(null);
+    const showConfirmModal = ref(false);
     const englishTextarea = ref(null);
     const isSettingsModalOpen = ref(false);
 
@@ -202,7 +215,7 @@ export default {
 
     // Settings object for modal
     const settings = computed(() => ({
-      fontSize: fontSize.value,
+      fontSize: Number(fontSize.value),
       selectedFont: selectedFont.value,
       showPinyin: showPinyin.value,
       showEnglish: showEnglish.value,
@@ -212,6 +225,25 @@ export default {
 
     const openSettingsModal = () => {
       isSettingsModalOpen.value = true
+    }
+
+        // Request clear with confirmation
+    const requestClearAll = () => {
+      // Only show confirmation if there's actual text to clear
+      if (inputText.value.trim() || englishText.value.trim()) {
+        showConfirmModal.value = true
+      }
+    }
+
+    // Actually clear the text when confirmed
+    const confirmClearAll = () => {
+      clearText('both')
+      showConfirmModal.value = false
+    }
+
+    // Cancel clearing
+    const cancelClearAll = () => {
+      showConfirmModal.value = false
     }
 
     const closeSettingsModal = () => {
@@ -391,19 +423,19 @@ export default {
       return result;
     });
 
-    const isPunctuation = char => {
-      const punctuationRegex = /[《》【】（）！？。，、：；'"『』「」]/;
-      return punctuationRegex.test(char);
-    };
+    // const isPunctuation = char => {
+    //   const punctuationRegex = /[《》【】（）！？。，、：；'"『』「」]/;
+    //   return punctuationRegex.test(char);
+    // };
 
-    const getPinyinForChar = char => {
-      if (isPunctuation(char)) return '';
-      return pinyin(char, {
-        toneType: 'symbol',
-        type: 'array',
-        nonZh: 'consecutive',
-      })[0];
-    };
+    // const getPinyinForChar = char => {
+    //   if (isPunctuation(char)) return '';
+    //   return pinyin(char, {
+    //     toneType: 'symbol',
+    //     type: 'array',
+    //     nonZh: 'consecutive',
+    //   })[0];
+    // };
 
     const getPinyinForSentence = sentence => {
       if (!sentence) return '';
@@ -570,6 +602,11 @@ export default {
       closeSettingsModal,
       saveSettings,
       resetToDefaults,
+
+      showConfirmModal,
+      requestClearAll,
+      confirmClearAll,
+      cancelClearAll,
     };
   },
 };
@@ -802,13 +839,36 @@ export default {
 .character {
   display: inline-block;
   margin-right: 2px;
-  font-weight: 600;
+  font-weight: normal;
+  color: #1a1a1a;
 }
 
 .pinyin {
   display: inline-block;
   margin-right: 4px;
-  color: #6c757d;
+  font-size: 0.7em;     /* Reduced from 0.8em to 0.7em */
+  color: #9ca3af;       /* Dimmed gray color */
+  font-weight: 400;     /* Normal weight for pinyin */
+  letter-spacing: 0.3px; /* Slight spacing for readability */
+  transform: translateY(-2px); /* Slightly raised position */
+}
+
+.pinyin:hover {
+  color: #6b7280;
+}
+
+.line-characters-and-pinyin {
+  display: inline;
+}
+
+.line-characters-and-pinyin > span {
+  display: inline;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.character, .pinyin {
+  display: inline;
 }
 
 @media (max-width: 768px) {

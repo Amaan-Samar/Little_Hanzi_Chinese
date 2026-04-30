@@ -693,6 +693,10 @@ export default {
   transition: all 0.2s;
   resize: vertical;
   font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .text-input:focus {
@@ -768,16 +772,33 @@ export default {
   transform: translateY(-1px);
 }
 
+/* Updated text wrapping styles */
 .line-characters-and-pinyin {
   text-wrap: wrap;
   width: 100%;
   display: flex;
   flex-wrap: wrap;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  line-height: 1.8;
+  gap: 2px;
+}
+
+.line-characters-and-pinyin > span {
+  display: inline;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 .english-translation-box {
   background-color: rgba(255, 255, 255, 0.3);
   margin-bottom: 8px;
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .english-text {
@@ -785,6 +806,9 @@ export default {
   line-height: 1.6;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   white-space: pre-wrap;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .english-input {
@@ -811,16 +835,21 @@ export default {
 
 .comparison-section {
   max-width: 1200px;
-  margin: 0 auto; 
+  margin: 0 auto;
   padding: 0 1rem;
+  overflow-x: hidden;
 }
 
 .comparison-display {
   max-width: 100%;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .comparison-block {
   margin-bottom: 24px;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .line-container {
@@ -829,48 +858,46 @@ export default {
   padding: 16px;
   margin-bottom: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  overflow-x: auto;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .text-line {
   display: block;
-  flex-wrap: wrap;
+  word-wrap: break-word;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .character {
-  display: inline-block;
+  display: inline;
   margin-right: 2px;
   font-weight: normal;
   color: #1a1a1a;
+  white-space: normal;
+  word-break: keep-all;
+  line-height: 1.5;
 }
 
 .pinyin {
-  display: inline-block;
+  display: inline;
   margin-right: 4px;
-  font-size: 0.7em;     /* Reduced from 0.8em to 0.7em */
-  color: #9ca3af;       /* Dimmed gray color */
-  font-weight: 400;     /* Normal weight for pinyin */
-  letter-spacing: 0.3px; /* Slight spacing for readability */
-  transform: translateY(-2px); /* Slightly raised position */
+  font-size: 0.65em;
+  color: #9ca3af;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+  white-space: normal;
+  word-break: keep-all;
+  transition: color 0.2s ease;
 }
 
 .pinyin:hover {
   color: #6b7280;
 }
 
-.line-characters-and-pinyin {
-  display: inline;
-}
-
-.line-characters-and-pinyin > span {
-  display: inline;
-  white-space: normal;
-  word-break: keep-all;
-}
-
-.character, .pinyin {
-  display: inline;
-}
-
+/* Mobile specific fixes */
 @media (max-width: 768px) {
   .app-header {
     padding: 8px 16px;
@@ -894,6 +921,40 @@ export default {
   
   .line-container {
     padding: 12px;
+  }
+  
+  .character {
+    font-size: 0.95em;
+  }
+  
+  .pinyin {
+    font-size: 0.55em;
+    margin-left: 1px;
+    margin-right: 2px;
+  }
+  
+  .line-characters-and-pinyin {
+    gap: 1px;
+    line-height: 1.6;
+  }
+}
+
+/* For very small screens */
+@media (max-width: 480px) {
+  .character {
+    font-size: 0.9em;
+  }
+  
+  .pinyin {
+    font-size: 0.5em;
+  }
+  
+  .line-container {
+    padding: 8px;
+  }
+  
+  .english-text {
+    font-size: 0.9em;
   }
 }
 </style>

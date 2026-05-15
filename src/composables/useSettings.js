@@ -16,7 +16,8 @@ export function useSettings() {
           showPinyin: parsed.showPinyin ?? true,
           showEnglish: parsed.showEnglish ?? true,
           showChinese: parsed.showChinese ?? true,
-          displayOrder: parsed.displayOrder ?? 'en-cn'
+          displayOrder: parsed.displayOrder ?? 'en-cn',
+          interleaveLines: parsed.interleaveLines ?? false
         }
       }
     } catch (error) {
@@ -40,7 +41,8 @@ export function useSettings() {
     showPinyin: true,
     showEnglish: true,
     showChinese: true,
-    displayOrder: 'en-cn'
+    displayOrder: 'en-cn',
+    interleaveLines: false
   }
 
   const savedSettings = loadSettings()
@@ -52,6 +54,7 @@ export function useSettings() {
   const showEnglish = ref(savedSettings?.showEnglish ?? defaultSettings.showEnglish)
   const showChinese = ref(savedSettings?.showChinese ?? defaultSettings.showChinese)
   const displayOrder = ref(savedSettings?.displayOrder ?? defaultSettings.displayOrder)
+  const interleaveLines = ref(savedSettings?.interleaveLines ?? defaultSettings.interleaveLines)
 
   // Save settings whenever any setting changes
   const saveCurrentSettings = () => {
@@ -61,12 +64,13 @@ export function useSettings() {
       showPinyin: showPinyin.value,
       showEnglish: showEnglish.value,
       showChinese: showChinese.value,
-      displayOrder: displayOrder.value
+      displayOrder: displayOrder.value,
+      interleaveLines: interleaveLines.value
     })
   }
 
   // Watch all settings and save on change
-  watch([fontSize, selectedFont, showPinyin, showEnglish, showChinese, displayOrder], () => {
+  watch([fontSize, selectedFont, showPinyin, showEnglish, showChinese, displayOrder, interleaveLines], () => {
     saveCurrentSettings()
   }, { deep: true })
 
@@ -78,6 +82,7 @@ export function useSettings() {
     showEnglish.value = defaultSettings.showEnglish
     showChinese.value = defaultSettings.showChinese
     displayOrder.value = defaultSettings.displayOrder
+    interleaveLines.value = defaultSettings.interleaveLines
   }
 
   return {
@@ -87,6 +92,7 @@ export function useSettings() {
     showEnglish,
     showChinese,
     displayOrder,
+    interleaveLines,
     resetSettings,
     saveCurrentSettings
   }

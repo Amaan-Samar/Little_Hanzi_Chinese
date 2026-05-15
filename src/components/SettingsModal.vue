@@ -10,7 +10,7 @@
         </div>
 
         <div class="settings-modal-body">
-          <!-- Font Size -->
+          <!-- Font Size - Updates instantly as you slide -->
           <div class="setting-group">
             <label class="setting-label">Font Size</label>
             <div class="font-size-control">
@@ -21,12 +21,13 @@
                 max="32" 
                 step="1" 
                 class="size-slider"
+                @input="handleFontSizeChange"
               />
               <span class="size-value">{{ localSettings.fontSize }}px</span>
             </div>
           </div>
 
-          <!-- Font Family -->
+          <!-- Font Family - Updates instantly when clicked -->
           <div class="setting-group">
             <label class="setting-label">Font Family</label>
             <div class="font-options-grid">
@@ -36,44 +37,58 @@
                 class="font-option"
                 :class="{ active: localSettings.selectedFont === font.value }"
                 :style="{ fontFamily: font.fontFamily }"
-                @click="localSettings.selectedFont = font.value"
+                @click="handleFontChange(font.value)"
               >
                 {{ font.label }}
               </button>
             </div>
           </div>
 
-          <!-- Display Sections -->
+          <!-- Display Sections - Updates instantly when toggled -->
           <div class="setting-group">
             <label class="setting-label">Display Sections</label>
             <div class="toggle-group">
               <label class="toggle-item">
-                <input type="checkbox" v-model="localSettings.showPinyin">
+                <input type="checkbox" v-model="localSettings.showPinyin" @change="handleShowPinyinChange">
                 <span>Show Pinyin</span>
               </label>
               <label class="toggle-item">
-                <input type="checkbox" v-model="localSettings.showChinese">
+                <input type="checkbox" v-model="localSettings.showChinese" @change="handleShowChineseChange">
                 <span>Show Chinese</span>
               </label>
               <label class="toggle-item">
-                <input type="checkbox" v-model="localSettings.showEnglish">
+                <input type="checkbox" v-model="localSettings.showEnglish" @change="handleShowEnglishChange">
                 <span>Show English</span>
               </label>
             </div>
           </div>
 
-          <!-- Display Order -->
+          <!-- Display Order - Updates instantly when changed -->
           <div class="setting-group">
             <label class="setting-label">Display Order</label>
             <div class="radio-group">
               <label class="radio-item">
-                <input type="radio" v-model="localSettings.displayOrder" value="en-cn">
+                <input type="radio" v-model="localSettings.displayOrder" value="en-cn" @change="handleDisplayOrderChange">
                 <span>English → Chinese</span>
               </label>
               <label class="radio-item">
-                <input type="radio" v-model="localSettings.displayOrder" value="cn-en">
+                <input type="radio" v-model="localSettings.displayOrder" value="cn-en" @change="handleDisplayOrderChange">
                 <span>Chinese → English</span>
               </label>
+            </div>
+          </div>
+
+          <!-- Interleave Lines - Updates instantly when toggled -->
+          <div class="setting-group">
+            <label class="setting-label">Layout Mode</label>
+            <div class="toggle-group">
+              <label class="toggle-item">
+                <input type="checkbox" v-model="localSettings.interleaveLines" @change="handleInterleaveChange">
+                <span>Interleave Lines (Alternating Chinese/English lines)</span>
+              </label>
+              <p class="setting-description">
+                When enabled, Chinese and English will alternate line by line for easier parallel reading.
+              </p>
             </div>
           </div>
         </div>
@@ -83,11 +98,8 @@
             Reset to Defaults
           </button>
           <div class="action-buttons">
-            <button class="cancel-btn" @click="close">
-              Cancel
-            </button>
-            <button class="save-btn" @click="save">
-              Save Changes
+            <button class="close-btn-bottom" @click="close">
+              Close
             </button>
           </div>
         </div>
@@ -107,22 +119,24 @@ const props = defineProps({
   },
   settings: {
     type: Object,
-    required: true,
-    validator: (value) => {
-      return value && 
-        typeof value.fontSize === 'number' &&
-        typeof value.selectedFont === 'string' &&
-        typeof value.showPinyin === 'boolean' &&
-        typeof value.showChinese === 'boolean' &&
-        typeof value.showEnglish === 'boolean' &&
-        typeof value.displayOrder === 'string'
-    }
+    required: true
   }
 })
 
 const emit = defineEmits(['close', 'save', 'reset'])
 
-const localSettings = ref({ ...props.settings })
+// Local reactive copy of settings
+const localSettings = ref({ 
+  fontSize: 15,
+  selectedFont: 'NotoSansSC',
+  showPinyin: true,
+  showChinese: true,
+  showEnglish: true,
+  displayOrder: 'en-cn',
+  interleaveLines: false,
+  ...props.settings 
+})
+
 const isMobile = ref(false)
 
 const fontOptions = [
@@ -134,6 +148,41 @@ const fontOptions = [
   { value: 'ZCOOLKuaiLe', label: 'ZCOOL KuaiLe', fontFamily: "'ZCOOL KuaiLe', cursive" },
   { value: 'MaShanZheng', label: 'Ma Shan Zheng', fontFamily: "'Ma Shan Zheng', cursive" }
 ]
+
+// Debounced font size update to prevent too many emits while sliding
+let fontSizeTimeout = null
+const handleFontSizeChange = () => {
+  if (fontSizeTimeout) clearTimeout(fontSizeTimeout)
+  fontSizeTimeout = setTimeout(() => {
+    emit('save', localSettings.value)
+  }, 50)
+}
+
+// Instant updates for other settings
+const handleFontChange = (fontValue) => {
+  localSettings.value.selectedFont = fontValue
+  emit('save', localSettings.value)
+}
+
+const handleShowPinyinChange = () => {
+  emit('save', localSettings.value)
+}
+
+const handleShowChineseChange = () => {
+  emit('save', localSettings.value)
+}
+
+const handleShowEnglishChange = () => {
+  emit('save', localSettings.value)
+}
+
+const handleDisplayOrderChange = () => {
+  emit('save', localSettings.value)
+}
+
+const handleInterleaveChange = () => {
+  emit('save', localSettings.value)
+}
 
 const checkMobile = () => {
   isMobile.value = window.innerWidth <= 768
@@ -147,20 +196,19 @@ const close = () => {
   emit('close')
 }
 
-const save = () => {
-  emit('save', localSettings.value)
-}
-
 const resetToDefaults = () => {
-  emit('reset')
-  localSettings.value = {
+  const defaults = {
     fontSize: 15,
     selectedFont: 'NotoSansSC',
     showPinyin: true,
     showChinese: true,
     showEnglish: true,
-    displayOrder: 'en-cn'
+    displayOrder: 'en-cn',
+    interleaveLines: false
   }
+  localSettings.value = { ...defaults }
+  emit('reset')
+  emit('save', localSettings.value) // Save immediately on reset
 }
 
 // Handle escape key
@@ -192,6 +240,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', checkMobile)
   document.removeEventListener('keydown', handleEscape)
+  if (fontSizeTimeout) clearTimeout(fontSizeTimeout)
 })
 </script>
 
@@ -300,6 +349,13 @@ onBeforeUnmount(() => {
   margin-bottom: 16px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.setting-description {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6c757d;
+  line-height: 1.4;
 }
 
 .font-size-control {
@@ -446,22 +502,7 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 
-.cancel-btn {
-  padding: 10px 20px;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 10px;
-  color: #495057;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cancel-btn:hover {
-  background: #e9ecef;
-}
-
-.save-btn {
+.close-btn-bottom {
   padding: 10px 24px;
   background: #4a6cf7;
   border: none;
@@ -472,7 +513,7 @@ onBeforeUnmount(() => {
   transition: all 0.2s;
 }
 
-.save-btn:hover {
+.close-btn-bottom:hover {
   background: #3a5ce8;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(74, 108, 247, 0.3);
@@ -496,10 +537,9 @@ onBeforeUnmount(() => {
     width: 100%;
   }
   
-  .cancel-btn,
-  .save-btn,
-  .reset-btn {
-    flex: 1;
+  .reset-btn,
+  .close-btn-bottom {
+    width: 100%;
   }
   
   .font-options-grid {

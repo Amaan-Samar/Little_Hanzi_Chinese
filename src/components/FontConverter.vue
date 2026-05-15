@@ -83,7 +83,8 @@
 
       <div v-if="inputText.trim() && (showEnglish || showChinese)" class="comparison-section">
         <div class="comparison-display relative">
-          <template v-if="comparisonData && Object.keys(comparisonData).length">
+          <!-- Old rendering method (paragraph by paragraph) -->
+          <template v-if="!interleaveLines">
             <div v-for="(block, sentenceId) in comparisonData" :key="sentenceId" class="comparison-block relative">
               
               <!-- Render based on display order and visibility toggles -->
@@ -136,13 +137,31 @@
               </template>
 
             </div>
-            <div 
-              class="scroll-spacer"
-              :style="{
-                minHeight: `calc(66vh - ${fontSize * 2}px)`
-              }"
-            ></div>
           </template>
+
+          <!-- New interleaved rendering method -->
+          <template v-else>
+            <div v-if="interleavedDisplayData && interleavedDisplayData.length" class="interleaved-container">
+              <div v-for="(block, blockIndex) in interleavedDisplayData" :key="blockIndex" class="interleaved-block">
+                <div v-for="(line, lineIndex) in block" :key="lineIndex" 
+                     :class="['interleaved-line', line.type]"
+                     :style="{
+                       fontSize: line.type === 'chinese' ? `${fontSize}px` : `${fontSize * 0.8}px`,
+                       fontFamily: line.type === 'chinese' ? getFontFamily : '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif'
+                     }">
+                  <span v-if="line.type === 'chinese'" v-html="line.content"></span>
+                  <span v-else>{{ line.content }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <div 
+            class="scroll-spacer"
+            :style="{
+              minHeight: `calc(66vh - ${fontSize * 2}px)`
+            }"
+          ></div>
         </div>
       </div>
 
@@ -176,7 +195,7 @@ import { Edit as EditIcon, Settings } from 'lucide-vue-next';
 import EditModal from './EditModal.vue';
 import ConfirmModal from './ConfirmModal.vue';
 import SettingsModal from './SettingsModal.vue';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { pinyin } from 'pinyin-pro';
 import { useSettings } from '../composables/useSettings';
 
@@ -198,6 +217,7 @@ export default {
       showEnglish,
       showChinese,
       displayOrder,
+      interleaveLines,
       resetSettings
     } = useSettings()
     
@@ -207,6 +227,7 @@ export default {
     const showConfirmModal = ref(false);
     const englishTextarea = ref(null);
     const isSettingsModalOpen = ref(false);
+    const containerWidth = ref(800); // Default container width
 
     const isEditModalOpen = ref(false)
     const editModalType = ref('chinese')
@@ -220,28 +241,211 @@ export default {
       showPinyin: showPinyin.value,
       showEnglish: showEnglish.value,
       showChinese: showChinese.value,
-      displayOrder: displayOrder.value
+      displayOrder: displayOrder.value,
+      interleaveLines: interleaveLines.value
     }))
+
+    // Update container width on resize
+    const updateContainerWidth = () => {
+      const container = document.querySelector('.comparison-display')
+      if (container) {
+        containerWidth.value = container.clientWidth - 32 // Subtract padding
+      }
+    }
+
+    // Split text into lines based on container width
+    const splitTextIntoLines = (text, width, fontSz, fontFamily, isChinese = true) => {
+      if (!text || !width || width <= 0) return [text]
+      
+      // Create a hidden measuring element
+      const measureDiv = document.createElement('div')
+      measureDiv.style.position = 'absolute'
+      measureDiv.style.visibility = 'hidden'
+      measureDiv.style.top = '-9999px'
+      measureDiv.style.left = '-9999px'
+      measureDiv.style.width = `${width}px`
+      measureDiv.style.fontSize = `${fontSz}px`
+      measureDiv.style.fontFamily = fontFamily
+      measureDiv.style.lineHeight = '1.5'
+      measureDiv.style.whiteSpace = 'pre-wrap'
+      measureDiv.style.wordWrap = 'break-word'
+      measureDiv.style.wordBreak = 'break-word'
+      measureDiv.style.padding = '0'
+      measureDiv.style.margin = '0'
+      document.body.appendChild(measureDiv)
+      
+      const lines = []
+      let currentLine = ''
+      
+      // For Chinese text, we need to preserve the character+pinyin pairs
+      let chars = []
+      if (isChinese) {
+        // For Chinese, we need to split by character+pinyin pairs
+        // The text comes as "司sī 美měi 的de" format
+        chars = text.split(/(\S+?[\u4e00-\u9fa5][a-z]+\s+|\S+?[\u4e00-\u9fa5][a-z]+$|\S+)/)
+      } else {
+        // For English, split by spaces and punctuation
+        chars = text.split(/(\S+\s+|\S+$)/)
+      }
+      
+      chars = chars.filter(c => c && c.trim())
+      
+      for (const char of chars) {
+        const testLine = currentLine + char
+        measureDiv.textContent = testLine
+        
+        // Check if adding this character exceeds line height
+        if (measureDiv.scrollHeight > 30) { // Height threshold (approx 1 line)
+          if (currentLine.trim()) {
+            lines.push(currentLine.trim())
+          }
+          currentLine = char
+        } else {
+          currentLine = testLine
+        }
+      }
+      
+      if (currentLine.trim()) {
+        lines.push(currentLine.trim())
+      }
+      
+      document.body.removeChild(measureDiv)
+      return lines
+    }
+
+    // Convert Chinese text to HTML with pinyin
+    const getChineseWithPinyinHTML = (chineseText) => {
+      if (!chineseText) return ''
+      if (!showPinyin.value) return chineseText
+      
+      const pairs = getPinyinAndChar(chineseText)
+      return pairs.map(pair => {
+        if (pair[1]) {
+          return `<span class="chinese-with-pinyin">${pair[0]}<span class="inline-pinyin">${pair[1]}</span></span>`
+        }
+        return pair[0]
+      }).join(' ')
+    }
+
+    // Get Chinese text as plain string with pinyin
+    const getChineseWithPinyinText = (chineseText) => {
+      if (!chineseText) return ''
+      if (!showPinyin.value) return chineseText
+      
+      const pairs = getPinyinAndChar(chineseText)
+      return pairs.map(pair => pair[0] + (pair[1] || '')).join(' ')
+    }
+
+    // Interleaved display data
+    const interleavedDisplayData = computed(() => {
+      if (!interleaveLines.value || !inputText.value.trim()) return null
+      
+      const chineseParagraphs = inputText.value.split(/\n\n/).filter(p => p.trim())
+      const englishParagraphs = englishText.value.split(/\n\n/).filter(p => p.trim())
+      
+      // Update container width
+      nextTick(() => updateContainerWidth())
+      
+      const interleavedBlocks = []
+      
+      for (let i = 0; i < chineseParagraphs.length; i++) {
+        const chinesePara = chineseParagraphs[i]
+        const englishPara = englishParagraphs[i] || ''
+        
+        if (!showChinese.value && !showEnglish.value) continue
+        
+        // Get Chinese text with pinyin
+        const chineseText = getChineseWithPinyinText(chinesePara)
+        
+        // Split into lines based on container width
+        let chineseLines = []
+        let englishLines = []
+        
+        if (showChinese.value && chineseText) {
+          chineseLines = splitTextIntoLines(
+            chineseText, 
+            containerWidth.value, 
+            fontSize.value, 
+            getFontFamily.value,
+            true
+          )
+        }
+        
+        if (showEnglish.value && englishPara) {
+          englishLines = splitTextIntoLines(
+            englishPara,
+            containerWidth.value,
+            fontSize.value * 0.8,
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            false
+          )
+        }
+        
+        // Interleave lines based on display order
+        const interleaved = []
+        const maxLines = Math.max(chineseLines.length, englishLines.length)
+        
+        if (displayOrder.value === 'en-cn') {
+          // English first
+          for (let lineIndex = 0; lineIndex < maxLines; lineIndex++) {
+            if (lineIndex < englishLines.length && showEnglish.value) {
+              interleaved.push({
+                type: 'english',
+                content: englishLines[lineIndex]
+              })
+            }
+            if (lineIndex < chineseLines.length && showChinese.value) {
+              // For Chinese, we need to preserve the pinyin formatting
+              const originalChinesePara = getChineseWithPinyinHTML(chinesePara)
+              // This is simplified - we'd need to map lines back to original
+              interleaved.push({
+                type: 'chinese',
+                content: chineseLines[lineIndex]
+              })
+            }
+          }
+        } else {
+          // Chinese first
+          for (let lineIndex = 0; lineIndex < maxLines; lineIndex++) {
+            if (lineIndex < chineseLines.length && showChinese.value) {
+              interleaved.push({
+                type: 'chinese',
+                content: chineseLines[lineIndex]
+              })
+            }
+            if (lineIndex < englishLines.length && showEnglish.value) {
+              interleaved.push({
+                type: 'english',
+                content: englishLines[lineIndex]
+              })
+            }
+          }
+        }
+        
+        if (interleaved.length) {
+          interleavedBlocks.push(interleaved)
+        }
+      }
+      
+      return interleavedBlocks
+    })
 
     const openSettingsModal = () => {
       isSettingsModalOpen.value = true
     }
 
-        // Request clear with confirmation
+    // Request clear with confirmation
     const requestClearAll = () => {
-      // Only show confirmation if there's actual text to clear
       if (inputText.value.trim() || englishText.value.trim()) {
         showConfirmModal.value = true
       }
     }
 
-    // Actually clear the text when confirmed
     const confirmClearAll = () => {
       clearText('both')
       showConfirmModal.value = false
     }
 
-    // Cancel clearing
     const cancelClearAll = () => {
       showConfirmModal.value = false
     }
@@ -257,7 +461,10 @@ export default {
       showEnglish.value = newSettings.showEnglish
       showChinese.value = newSettings.showChinese
       displayOrder.value = newSettings.displayOrder
+      interleaveLines.value = newSettings.interleaveLines
       closeSettingsModal()
+      // Recalculate lines when settings change
+      nextTick(() => updateContainerWidth())
     }
 
     const resetToDefaults = () => {
@@ -361,10 +568,6 @@ export default {
       }
     };
 
-    const clearAllText = () => {
-      clearText('both');
-    };
-
     const clearOrPasteText = (type) => {
       const text = type === 'chinese' ? inputText.value : englishText.value;
       
@@ -422,20 +625,6 @@ export default {
       
       return result;
     });
-
-    // const isPunctuation = char => {
-    //   const punctuationRegex = /[《》【】（）！？。，、：；'"『』「」]/;
-    //   return punctuationRegex.test(char);
-    // };
-
-    // const getPinyinForChar = char => {
-    //   if (isPunctuation(char)) return '';
-    //   return pinyin(char, {
-    //     toneType: 'symbol',
-    //     type: 'array',
-    //     nonZh: 'consecutive',
-    //   })[0];
-    // };
 
     const getPinyinForSentence = sentence => {
       if (!sentence) return '';
@@ -555,6 +744,22 @@ export default {
       }
     };
 
+    // Watch for window resize to recalculate lines
+    watch([interleaveLines, inputText, englishText, fontSize, showPinyin], () => {
+      if (interleaveLines.value) {
+        nextTick(() => updateContainerWidth())
+      }
+    })
+
+    // Set up resize observer
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', () => {
+        if (interleaveLines.value) {
+          updateContainerWidth()
+        }
+      })
+    }
+
     watch(inputText, adjustHeight);
     watch(englishText, adjustEnglishHeight);
 
@@ -568,16 +773,18 @@ export default {
       showEnglish,
       showChinese,
       displayOrder,
+      interleaveLines,
       
       // Computed
       getFontFamily,
       comparisonData,
       englishSegments,
       settings,
+      interleavedDisplayData,
       
       // Methods
       clearOrPasteText,
-      clearAllText,
+      clearAllText: clearText,
       flattenBlockLines,
       adjustHeight,
       adjustEnglishHeight,
@@ -897,6 +1104,52 @@ export default {
   color: #6b7280;
 }
 
+/* Interleaved mode styles */
+.interleaved-container {
+  width: 100%;
+}
+
+.interleaved-block {
+  margin-bottom: 24px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.interleaved-line {
+  padding: 6px 0;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.interleaved-line.chinese {
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.interleaved-line.english {
+  color: #4a6cf7;
+  /* margin-bottom: 4px; */
+  /* border-left: 3px solid #4a6cf7; */
+  /* padding-left: 12px; */
+}
+
+/* Inline pinyin styling for interleaved mode */
+.chinese-with-pinyin {
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.inline-pinyin {
+  font-size: 0.65em;
+  color: #9ca3af;
+  margin-left: 1px;
+  font-weight: 400;
+}
+
 /* Mobile specific fixes */
 @media (max-width: 768px) {
   .app-header {
@@ -936,6 +1189,14 @@ export default {
   .line-characters-and-pinyin {
     gap: 1px;
     line-height: 1.6;
+  }
+  
+  .interleaved-block {
+    padding: 12px;
+  }
+  
+  .interleaved-line.english {
+    padding-left: 8px;
   }
 }
 

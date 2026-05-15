@@ -66,7 +66,7 @@
           </button>
           
           <div v-if="isSizeControlOpen" class="size-control-popup" @click.stop>
-            <input type="range" v-model="localFontSize" min="12" max="32" step="1" class="size-slider" @input="updateFontSizeDebounced" />
+            <input type="range" v-model="localFontSize" min="12" max="32" step="1" class="size-slider" @input="updateFontSizeImmediately" />
             <span class="size-value">{{ localFontSize }}px</span>
           </div>
         </div>
@@ -80,7 +80,7 @@
       </div>
     </div>
 
-    <!-- Settings Modal -->
+    <!-- Settings Modal - Updated for instant updates -->
     <div v-if="showSettingsModal" class="modal-overlay" @click="closeSettingsModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
@@ -89,41 +89,88 @@
         </div>
         <div class="modal-body">
           <div class="setting-item">
-            <label>Default View</label>
+            <label>Font Size</label>
+            <div class="font-size-control">
+              <input 
+                type="range" 
+                v-model="localFontSizeSetting" 
+                min="12" 
+                max="32" 
+                step="1" 
+                class="size-slider"
+                @input="updateFontSizeFromModal"
+              />
+              <span class="size-value">{{ localFontSizeSetting }}px</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <label>Font Family</label>
+            <div class="font-options-grid">
+              <button
+                v-for="font in fontOptions"
+                :key="font.value"
+                class="font-option"
+                :class="{ active: localSelectedFont === font.value }"
+                :style="{ fontFamily: font.fontFamily }"
+                @click="updateFontFromModal(font.value)"
+              >
+                {{ font.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <label>Display Sections</label>
             <div class="checkbox-group">
               <label class="checkbox-label">
-                <input type="checkbox" v-model="localShowPinyin" @change="updateShowPinyin">
-                <span>Show Pinyin by default</span>
+                <input type="checkbox" v-model="localShowPinyinSetting" @change="updateShowPinyinFromModal">
+                <span>Show Pinyin</span>
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" v-model="localShowChinese" @change="updateShowChinese">
-                <span>Show Chinese by default</span>
+                <input type="checkbox" v-model="localShowChineseSetting" @change="updateShowChineseFromModal">
+                <span>Show Chinese</span>
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" v-model="localShowEnglish" @change="updateShowEnglish">
-                <span>Show English by default</span>
+                <input type="checkbox" v-model="localShowEnglishSetting" @change="updateShowEnglishFromModal">
+                <span>Show English</span>
               </label>
             </div>
           </div>
+
           <div class="setting-item">
-            <label>Default Display Order</label>
+            <label>Display Order</label>
             <div class="radio-group">
               <label class="radio-label">
-                <input type="radio" v-model="localDisplayOrder" value="en-cn" @change="updateDisplayOrder">
+                <input type="radio" v-model="localDisplayOrderSetting" value="en-cn" @change="updateDisplayOrderFromModal">
                 <span>English → Chinese</span>
               </label>
               <label class="radio-label">
-                <input type="radio" v-model="localDisplayOrder" value="cn-en" @change="updateDisplayOrder">
+                <input type="radio" v-model="localDisplayOrderSetting" value="cn-en" @change="updateDisplayOrderFromModal">
                 <span>Chinese → English</span>
               </label>
             </div>
           </div>
+
+          <div class="setting-item">
+            <label>Layout Mode</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="localInterleaveLinesSetting" @change="updateInterleaveLinesFromModal">
+                <span>Interleave Lines (Alternating Chinese/English lines)</span>
+              </label>
+              <p class="setting-description">
+                When enabled, Chinese and English will alternate line by line for easier parallel reading.
+              </p>
+            </div>
+          </div>
+
           <button class="reset-btn" @click="handleResetSettings">
             Reset to Defaults
           </button>
         </div>
         <div class="modal-footer">
-          <button class="save-btn" @click="saveSettingsAndClose">Save Settings</button>
+          <button class="close-modal-btn" @click="closeSettingsModal">Close</button>
         </div>
       </div>
     </div>
@@ -131,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Trash2, Languages, ArrowLeftRight, ChevronDown, Check, Settings, Type } from 'lucide-vue-next'
 
 const FontSize = {
@@ -144,12 +191,13 @@ const props = defineProps({
   showChinese: { type: Boolean, required: true },
   displayOrder: { type: String, required: true },
   fontSize: { type: Number, required: true },
-  selectedFont: { type: String, required: true }
+  selectedFont: { type: String, required: true },
+  interleaveLines: { type: Boolean, default: false }
 })
 
 const emit = defineEmits([
   'clear', 'toggle-pinyin', 'toggle-english', 'toggle-chinese', 'toggle-order',
-  'update-font-size', 'update-selected-font', 'reset-settings'
+  'update-font-size', 'update-selected-font', 'reset-settings', 'toggle-interleave'
 ])
 
 // UI State
@@ -166,12 +214,15 @@ let ticking = false
 let scrollLock = false
 let scrollLockTimeout = null
 
-// Local copies for modals
+// Local copies for modals - instant updates
 const localFontSize = ref(props.fontSize)
-const localShowPinyin = ref(props.showPinyin)
-const localShowChinese = ref(props.showChinese)
-const localShowEnglish = ref(props.showEnglish)
-const localDisplayOrder = ref(props.displayOrder)
+const localFontSizeSetting = ref(props.fontSize)
+const localSelectedFont = ref(props.selectedFont)
+const localShowPinyinSetting = ref(props.showPinyin)
+const localShowChineseSetting = ref(props.showChinese)
+const localShowEnglishSetting = ref(props.showEnglish)
+const localDisplayOrderSetting = ref(props.displayOrder)
+const localInterleaveLinesSetting = ref(props.interleaveLines)
 
 // Font options
 const fontOptions = [
@@ -198,6 +249,36 @@ const currentFontShortName = computed(() => {
 
 const orderLabel = computed(() => {
   return props.displayOrder === 'en-cn' ? 'EN→CN' : 'CN→EN'
+})
+
+// Update local values when props change
+watch(() => props.fontSize, (newVal) => {
+  localFontSize.value = newVal
+  localFontSizeSetting.value = newVal
+})
+
+watch(() => props.selectedFont, (newVal) => {
+  localSelectedFont.value = newVal
+})
+
+watch(() => props.showPinyin, (newVal) => {
+  localShowPinyinSetting.value = newVal
+})
+
+watch(() => props.showChinese, (newVal) => {
+  localShowChineseSetting.value = newVal
+})
+
+watch(() => props.showEnglish, (newVal) => {
+  localShowEnglishSetting.value = newVal
+})
+
+watch(() => props.displayOrder, (newVal) => {
+  localDisplayOrderSetting.value = newVal
+})
+
+watch(() => props.interleaveLines, (newVal) => {
+  localInterleaveLinesSetting.value = newVal
 })
 
 // FIXED: Throttled scroll handler with requestAnimationFrame
@@ -250,13 +331,42 @@ const onScroll = () => {
   }, 500)
 }
 
-// Debounced font size update
-let sizeUpdateTimeout = null
-const updateFontSizeDebounced = () => {
-  if (sizeUpdateTimeout) clearTimeout(sizeUpdateTimeout)
-  sizeUpdateTimeout = setTimeout(() => {
-    emit('update-font-size', localFontSize.value)
-  }, 100)
+// Immediate font size update (no debounce for instant feedback)
+const updateFontSizeImmediately = () => {
+  emit('update-font-size', localFontSize.value)
+}
+
+// Modal font size update
+const updateFontSizeFromModal = () => {
+  emit('update-font-size', localFontSizeSetting.value)
+  localFontSize.value = localFontSizeSetting.value
+}
+
+// Font updates
+const updateFontFromModal = (font) => {
+  localSelectedFont.value = font
+  emit('update-selected-font', font)
+}
+
+// Toggle updates from modal
+const updateShowPinyinFromModal = () => {
+  emit('toggle-pinyin')
+}
+
+const updateShowChineseFromModal = () => {
+  emit('toggle-chinese')
+}
+
+const updateShowEnglishFromModal = () => {
+  emit('toggle-english')
+}
+
+const updateDisplayOrderFromModal = () => {
+  emit('toggle-order')
+}
+
+const updateInterleaveLinesFromModal = () => {
+  emit('toggle-interleave')
 }
 
 const toggleOrderDropdown = () => {
@@ -303,10 +413,14 @@ const handleToggleEnglish = () => emit('toggle-english')
 const handleToggleChinese = () => emit('toggle-chinese')
 
 const openSettingsModal = () => {
-  localShowPinyin.value = props.showPinyin
-  localShowChinese.value = props.showChinese
-  localShowEnglish.value = props.showEnglish
-  localDisplayOrder.value = props.displayOrder
+  // Sync local values with current props before opening
+  localFontSizeSetting.value = props.fontSize
+  localSelectedFont.value = props.selectedFont
+  localShowPinyinSetting.value = props.showPinyin
+  localShowChineseSetting.value = props.showChinese
+  localShowEnglishSetting.value = props.showEnglish
+  localDisplayOrderSetting.value = props.displayOrder
+  localInterleaveLinesSetting.value = props.interleaveLines
   showSettingsModal.value = true
   isOrderDropdownOpen.value = false
   isFontDropdownOpen.value = false
@@ -317,42 +431,19 @@ const closeSettingsModal = () => {
   showSettingsModal.value = false
 }
 
-const updateShowPinyin = () => {
-  if (localShowPinyin.value !== props.showPinyin) {
-    emit('toggle-pinyin')
-  }
-}
-
-const updateShowChinese = () => {
-  if (localShowChinese.value !== props.showChinese) {
-    emit('toggle-chinese')
-  }
-}
-
-const updateShowEnglish = () => {
-  if (localShowEnglish.value !== props.showEnglish) {
-    emit('toggle-english')
-  }
-}
-
-const updateDisplayOrder = () => {
-  if (localDisplayOrder.value !== props.displayOrder) {
-    emit('toggle-order')
-  }
-}
-
-const saveSettingsAndClose = () => {
-  showSettingsModal.value = false
-}
-
 const handleResetSettings = () => {
+  // Reset all settings instantly
   emit('reset-settings')
+  // Update local values
   localFontSize.value = 15
-  localShowPinyin.value = true
-  localShowChinese.value = true
-  localShowEnglish.value = true
-  localDisplayOrder.value = 'en-cn'
-  showSettingsModal.value = false
+  localFontSizeSetting.value = 15
+  localSelectedFont.value = 'NotoSansSC'
+  localShowPinyinSetting.value = true
+  localShowChineseSetting.value = true
+  localShowEnglishSetting.value = true
+  localDisplayOrderSetting.value = 'en-cn'
+  localInterleaveLinesSetting.value = false
+  closeSettingsModal()
 }
 
 const checkMobile = () => {
@@ -387,38 +478,41 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', checkMobile)
   window.removeEventListener('scroll', onScroll)
   document.removeEventListener('click', handleClickOutside)
-  if (sizeUpdateTimeout) clearTimeout(sizeUpdateTimeout)
   if (scrollLockTimeout) clearTimeout(scrollLockTimeout)
 })
 </script>
 
 <style scoped>
+/* Remove any overflow issues */
+* {
+  box-sizing: border-box;
+}
+
 .control-bar-wrapper {
   position: fixed;
   top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   z-index: 100;
-  max-width: 1200px;
-  width: calc(100% - 40px);
-  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  padding: 0 20px;
   will-change: transform, opacity;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .control-bar-wrapper.hidden {
-  transform: translateX(-50%) translateY(calc(-100% - 20px));
+  transform: translateY(calc(-100% - 20px));
   opacity: 0;
   pointer-events: none;
 }
 
 .control-bar-wrapper.visible {
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
 }
 
-/* Rest of your styles remain the same */
 .control-bar {
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(10px);
@@ -431,6 +525,10 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .control-bar.mobile {
@@ -624,8 +722,8 @@ onBeforeUnmount(() => {
   background: white;
   border-radius: 20px;
   width: 90%;
-  max-width: 450px;
-  max-height: 80vh;
+  max-width: 500px;
+  max-height: 85vh;
   overflow-y: auto;
   animation: slideUp 0.3s ease;
 }
@@ -689,6 +787,47 @@ onBeforeUnmount(() => {
   color: #2c3e50;
 }
 
+.setting-description {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6c757d;
+  line-height: 1.4;
+}
+
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.font-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.font-option {
+  padding: 10px 16px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.font-option:hover {
+  background: #e9ecef;
+  border-color: #4a6cf7;
+}
+
+.font-option.active {
+  background: #4a6cf7;
+  border-color: #4a6cf7;
+  color: white;
+}
+
 .checkbox-group,
 .radio-group {
   display: flex;
@@ -723,6 +862,7 @@ onBeforeUnmount(() => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  margin-top: 8px;
 }
 
 .reset-btn:hover {
@@ -734,7 +874,7 @@ onBeforeUnmount(() => {
   border-top: 1px solid #e9ecef;
 }
 
-.save-btn {
+.close-modal-btn {
   width: 100%;
   padding: 12px;
   background: #4a6cf7;
@@ -746,19 +886,8 @@ onBeforeUnmount(() => {
   transition: background 0.2s;
 }
 
-.save-btn:hover {
+.close-modal-btn:hover {
   background: #3a5ce8;
-}
-
-.main-content {
-  display: block;
-  padding-top: 70px; /* Add space for fixed control bar */
-}
-
-@media (max-width: 768px) {
-  .main-content {
-    padding-top: 60px;
-  }
 }
 
 @media (max-width: 768px) {
@@ -785,6 +914,14 @@ onBeforeUnmount(() => {
     left: auto;
     right: 0;
     transform: none;
+  }
+  
+  .control-bar-wrapper {
+    padding: 0 10px;
+  }
+  
+  .font-options-grid {
+    grid-template-columns: 1fr;
   }
 }
 

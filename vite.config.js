@@ -1,23 +1,51 @@
 import { defineConfig } from 'vite'
-import { VitePWA } from 'vite-plugin-pwa'
 import vue from '@vitejs/plugin-vue'
+import { VitePWA } from 'vite-plugin-pwa'
+import vueDevTools from 'vite-plugin-vue-devtools'
 
+// https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), VitePWA({ registerType: 'autoUpdate' })],
   base: '/Little_Hanzi_Chinese/',
-  build: {
-    outDir: 'dist',
-    assetsDir: 'assets',
-    // Ensure clean builds
-    emptyOutDir: true,
-    // Add source maps for better debugging
-    sourcemap: true,
-    // Increase build timeout
-    timeout: 120000,
-  },
+  plugins: [
+    vue(),
+    vueDevTools(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['pen.svg', 'robots.txt', 'sitemap.xml'],
+      manifest: false, // We're using public/manifest.json
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              }
+            }
+          }
+        ]
+      },
+      devOptions: {
+        enabled: false
+      }
+    })
+  ],
   server: {
-    port: 3000,
-    open: true,
-    host: '0.0.0.0'
-  },
+    host: true
+  }
 })

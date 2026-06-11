@@ -227,7 +227,7 @@ export default {
     const showConfirmModal = ref(false);
     const englishTextarea = ref(null);
     const isSettingsModalOpen = ref(false);
-    const containerWidth = ref(800); // Default container width
+    const containerWidth = ref(200); // Default container width
 
     const isEditModalOpen = ref(false)
     const editModalType = ref('chinese')

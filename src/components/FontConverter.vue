@@ -11,6 +11,7 @@
     </div>
 
     <div class="main-content">
+      <LoadingSpinner :isLoading="isLoading" :text="loadingText" />
       <div class="input-display-row">
         <!-- Chinese Text Input -->
         <div class="text-section" :style="{fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
@@ -19,8 +20,6 @@
               v-model="inputText" 
               placeholder="Enter Chinese text here..." 
               class="text-input w-full" 
-              @input="adjustHeight"
-              ref="chineseTextarea"
             ></textarea>
             <button 
               v-if="inputText.trim()" 
@@ -43,8 +42,6 @@
               v-model="englishText" 
               placeholder="Enter English translation here..." 
               class="text-input w-full english-input" 
-              @input="adjustEnglishHeight"
-              ref="englishTextarea"
             ></textarea>
             <button 
               v-if="englishText.trim()" 
@@ -156,6 +153,12 @@
             </div>
           </template>
 
+          <div v-if="inputText.trim()" class="quick-actions">
+            <button @click="requestClearAll" class="clear-all-btn">
+              Clear All Text
+            </button>
+          </div>
+
           <div 
             class="scroll-spacer"
             :style="{
@@ -168,12 +171,6 @@
       <!-- Empty state when both English and Chinese are hidden -->
       <div v-else-if="inputText.trim() && !showEnglish && !showChinese" class="empty-state">
         <p>Both English and Chinese paragraphs are hidden. Enable them in settings.</p>
-      </div>
-
-      <div v-if="inputText.trim()" class="quick-actions">
-        <button @click="requestClearAll" class="clear-all-btn">
-          Clear All Text
-        </button>
       </div>
     </div>
 
@@ -197,6 +194,7 @@ import ConfirmModal from './ConfirmModal.vue';
 import SettingsModal from './SettingsModal.vue';
 import { ref, computed, watch, nextTick } from 'vue';
 import { pinyin } from 'pinyin-pro';
+import LoadingSpinner from './LoadingSpinner.vue'; // Import the loading component
 import { useSettings } from '../composables/useSettings';
 
 
@@ -205,6 +203,7 @@ export default {
     EditModal,
     ConfirmModal,
     SettingsModal,
+    LoadingSpinner,
     EditIcon,
     Settings,
   },
@@ -223,11 +222,11 @@ export default {
     
     const inputText = ref('');
     const englishText = ref('');
-    const chineseTextarea = ref(null);
     const showConfirmModal = ref(false);
-    const englishTextarea = ref(null);
     const isSettingsModalOpen = ref(false);
     const containerWidth = ref(800); // Default container width
+    const isLoading = ref(false); // Add loading state
+    const loadingText = ref('Processing...'); // Add loading text
 
     const isEditModalOpen = ref(false)
     const editModalType = ref('chinese')
@@ -531,40 +530,62 @@ export default {
       return breakEnglishText(englishText.value, comparisonData.value);
     });
 
+    // const pasteFromClipboard = async (target = null) => {
+    //   try {
+    //     const clipboardText = await navigator.clipboard.readText();
+    //     const targetType = target || 'chinese';
+        
+    //     if (targetType === 'chinese') {
+    //       inputText.value = clipboardText;
+    //     } else {
+    //       englishText.value = clipboardText;
+    //     }
+    //   } catch (error) {
+    //     console.error('Failed to read clipboard contents: ', error);
+    //   }
+    // };
+
     const pasteFromClipboard = async (target = null) => {
+      isLoading.value = true;
+      loadingText.value = 'Pasting from clipboard...';
+      
       try {
+        // Simulate a small delay to ensure loading state is visible
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const clipboardText = await navigator.clipboard.readText();
         const targetType = target || 'chinese';
+        
+        loadingText.value = 'Processing text...';
+        
+        // Use setTimeout to allow the loading state to be visible
+        // and to prevent UI blocking during processing
+        await new Promise(resolve => setTimeout(resolve, 50));
         
         if (targetType === 'chinese') {
           inputText.value = clipboardText;
         } else {
           englishText.value = clipboardText;
         }
+        
+        // Small delay to show completion before hiding
+        await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         console.error('Failed to read clipboard contents: ', error);
+        loadingText.value = 'Failed to paste. Try again.';
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } finally {
+        isLoading.value = false;
       }
     };
 
     const clearText = (type = 'both') => {
       if (type === 'chinese' || type === 'both') {
         inputText.value = '';
-        if (chineseTextarea.value) {
-          setTimeout(() => {
-            chineseTextarea.value.style.height = 'auto';
-            chineseTextarea.value.style.height = '40px';
-          }, 0);
-        }
       }
       
       if (type === 'english' || type === 'both') {
         englishText.value = '';
-        if (englishTextarea.value) {
-          setTimeout(() => {
-            englishTextarea.value.style.height = 'auto';
-            englishTextarea.value.style.height = '40px';
-          }, 0);
-        }
       }
     };
 
@@ -720,30 +741,6 @@ export default {
       }
     };
 
-    const adjustHeight = () => {
-      if (chineseTextarea.value) {
-        chineseTextarea.value.style.height = 'auto';
-
-        if (!inputText.value.trim()) {
-          chineseTextarea.value.style.height = '40px';
-        } else {
-          chineseTextarea.value.style.height = `${chineseTextarea.value.scrollHeight}px`;
-        }
-      }
-    };
-
-    const adjustEnglishHeight = () => {
-      if (englishTextarea.value) {
-        englishTextarea.value.style.height = 'auto';
-
-        if (!englishText.value.trim()) {
-          englishTextarea.value.style.height = '40px';
-        } else {
-          englishTextarea.value.style.height = `${englishTextarea.value.scrollHeight}px`;
-        }
-      }
-    };
-
     // Watch for window resize to recalculate lines
     watch([interleaveLines, inputText, englishText, fontSize, showPinyin], () => {
       if (interleaveLines.value) {
@@ -760,9 +757,6 @@ export default {
       })
     }
 
-    watch(inputText, adjustHeight);
-    watch(englishText, adjustEnglishHeight);
-
     return {
       // Data
       inputText,
@@ -774,6 +768,9 @@ export default {
       showChinese,
       displayOrder,
       interleaveLines,
+
+      isLoading, // Add to return
+      loadingText, // Add to return
       
       // Computed
       getFontFamily,
@@ -786,12 +783,6 @@ export default {
       clearOrPasteText,
       clearAllText: clearText,
       flattenBlockLines,
-      adjustHeight,
-      adjustEnglishHeight,
-      
-      // Refs
-      chineseTextarea,
-      englishTextarea,
       
       // Modal related
       EditIcon,

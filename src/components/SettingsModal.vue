@@ -204,7 +204,7 @@ const resetToDefaults = () => {
     showChinese: true,
     showEnglish: true,
     displayOrder: 'en-cn',
-    interleaveLines: false
+    interleaveLines: true
   }
   localSettings.value = { ...defaults }
   emit('reset')

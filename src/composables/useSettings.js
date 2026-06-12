@@ -17,7 +17,7 @@ export function useSettings() {
           showEnglish: parsed.showEnglish ?? true,
           showChinese: parsed.showChinese ?? true,
           displayOrder: parsed.displayOrder ?? 'en-cn',
-          interleaveLines: parsed.interleaveLines ?? false
+          interleaveLines: parsed.interleaveLines ?? true
         }
       }
     } catch (error) {
@@ -42,7 +42,7 @@ export function useSettings() {
     showEnglish: true,
     showChinese: true,
     displayOrder: 'en-cn',
-    interleaveLines: false
+    interleaveLines: true
   }
 
   const savedSettings = loadSettings()

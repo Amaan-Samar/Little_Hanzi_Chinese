@@ -5,10 +5,26 @@
       <div class="logo-section">
         <h1 class="logo">LittleHanzi</h1>
       </div>
-      <button class="settings-icon-btn" @click="openSettingsModal" title="Settings">
-        <Settings :size="24" />
-      </button>
+      <div class="header-buttons">
+        <button class="history-icon-btn" @click="openHistoryModal" title="Reading History">
+          <BookOpen :size="22" />
+        </button>
+        <button class="settings-icon-btn" @click="openSettingsModal" title="Settings">
+          <Settings :size="24" />
+        </button>
+      </div>
     </div>
+    <!-- Add History Modal right after Settings Modal -->
+    <ArticleHistoryModal
+      :isOpen="isHistoryModalOpen"
+      :articles="articles"
+      :isCurrentArticle="isCurrentArticle"
+      :formatDate="formatDate"
+      @close="closeHistoryModal"
+      @load-article="loadArticleIntoEditor"
+      @delete-article="handleDeleteArticle"
+      @delete-all="handleDeleteAllArticles"
+    />
 
     <div class="main-content">
       <LoadingSpinner :isLoading="isLoading" :text="loadingText" />
@@ -188,7 +204,9 @@
 </template>
 
 <script>
-import { Edit as EditIcon, Settings } from 'lucide-vue-next';
+import ArticleHistoryModal from './ArticleHistoryModal.vue';
+import { useArticleHistory } from '../composables/useArticleHistory';
+import { Edit as EditIcon, Settings, BookOpen } from 'lucide-vue-next';
 import EditModal from './EditModal.vue';
 import ConfirmModal from './ConfirmModal.vue';
 import SettingsModal from './SettingsModal.vue';
@@ -200,10 +218,12 @@ import { useSettings } from '../composables/useSettings';
 
 export default {
   components: {
+    ArticleHistoryModal,
     EditModal,
     ConfirmModal,
     SettingsModal,
     LoadingSpinner,
+    BookOpen,
     EditIcon,
     Settings,
   },
@@ -219,6 +239,19 @@ export default {
       interleaveLines,
       resetSettings
     } = useSettings()
+
+    const {
+      articles,
+      scheduleAutoSave,
+      cancelAutoSave,
+      saveCurrentArticle,
+      deleteArticle,
+      deleteAllArticles,
+      loadArticle,
+      isCurrentArticle,
+      formatDate,
+      resetCurrentTracking
+    } = useArticleHistory()
     
     const inputText = ref('');
     const englishText = ref('');
@@ -232,6 +265,48 @@ export default {
     const editModalType = ref('chinese')
     const editModalTitle = computed(() => editModalType.value === 'chinese' ? 'Chinese Text' : 'English Translation')
     const editModalContent = computed(() => editModalType.value === 'chinese' ? inputText.value : englishText.value)
+
+
+    // Add these refs:
+    const isHistoryModalOpen = ref(false)
+    const lastSavedContent = ref({ chinese: '', english: '' })
+
+    // Add watchers for auto-save
+    watch([inputText, englishText], ([newChinese, newEnglish]) => {
+      if (newChinese && newChinese.trim()) {
+        scheduleAutoSave(newChinese, newEnglish)
+        lastSavedContent.value = { chinese: newChinese, english: newEnglish }
+      } else {
+        cancelAutoSave()
+        resetCurrentTracking()
+      }
+    }, { deep: true })
+
+    // Add the modal methods:
+    const openHistoryModal = () => {
+      isHistoryModalOpen.value = true
+    }
+
+    const closeHistoryModal = () => {
+      isHistoryModalOpen.value = false
+    }
+
+    const loadArticleIntoEditor = (article) => {
+      inputText.value = article.chineseContent
+      englishText.value = article.englishContent || ''
+      // Cancel any pending auto-save for previous content
+      cancelAutoSave()
+      // Reset tracking for new article
+      resetCurrentTracking()
+    }
+
+    const handleDeleteArticle = (articleId) => {
+      deleteArticle(articleId)
+    }
+
+    const handleDeleteAllArticles = () => {
+      deleteAllArticles()
+    }
 
     // Settings object for modal
     const settings = computed(() => ({
@@ -579,6 +654,17 @@ export default {
       }
     };
 
+    // const clearText = (type = 'both') => {
+    //   if (type === 'chinese' || type === 'both') {
+    //     inputText.value = '';
+    //   }
+      
+    //   if (type === 'english' || type === 'both') {
+    //     englishText.value = '';
+    //   }
+    // };
+
+    // Update the clearText function to also reset tracking
     const clearText = (type = 'both') => {
       if (type === 'chinese' || type === 'both') {
         inputText.value = '';
@@ -587,7 +673,13 @@ export default {
       if (type === 'english' || type === 'both') {
         englishText.value = '';
       }
-    };
+      
+      // Reset tracking when clearing
+      if (type === 'both' || (type === 'chinese' && !inputText.value.trim())) {
+        cancelAutoSave()
+        resetCurrentTracking()
+      }
+    }
 
     const clearOrPasteText = (type) => {
       const text = type === 'chinese' ? inputText.value : englishText.value;
@@ -758,6 +850,16 @@ export default {
     }
 
     return {
+      articles,
+      isHistoryModalOpen,
+      openHistoryModal,
+      closeHistoryModal,
+      loadArticleIntoEditor,
+      handleDeleteArticle,
+      handleDeleteAllArticles,
+      isCurrentArticle,
+      formatDate,
+
       // Data
       inputText,
       englishText,
@@ -1208,5 +1310,31 @@ export default {
   .english-text {
     font-size: 0.9em;
   }
+}
+
+
+/* Add to the existing styles */
+.header-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.history-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #495057;
+}
+
+.history-icon-btn:hover {
+  background: #f8f9fa;
+  transform: scale(1.05);
 }
 </style>

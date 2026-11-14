@@ -91,6 +91,21 @@
               </p>
             </div>
           </div>
+
+          <!-- Your Name -->
+          <div class="setting-group">
+            <label class="setting-label">Your Name</label>
+            <input
+              v-model="localSettings.displayName"
+              maxlength="40"
+              placeholder="e.g. Amaan"
+              class="name-input"
+              @input="handleNameChange"
+            />
+            <p class="setting-description">
+              Used to personalise your reading space and future shared articles.
+            </p>
+          </div>
         </div>
 
         <div class="settings-modal-footer">
@@ -134,6 +149,7 @@ const localSettings = ref({
   showEnglish: true,
   displayOrder: 'en-cn',
   interleaveLines: false,
+  displayName: '',
   ...props.settings 
 })
 
@@ -184,6 +200,11 @@ const handleInterleaveChange = () => {
   emit('save', localSettings.value)
 }
 
+const handleNameChange = () => {
+  localSettings.value.displayName = (localSettings.value.displayName || '').slice(0, 40)
+  emit('save', localSettings.value)
+}
+
 const checkMobile = () => {
   isMobile.value = window.innerWidth <= 768
 }
@@ -204,7 +225,8 @@ const resetToDefaults = () => {
     showChinese: true,
     showEnglish: true,
     displayOrder: 'en-cn',
-    interleaveLines: true
+    interleaveLines: true,
+    displayName: ''
   }
   localSettings.value = { ...defaults }
   emit('reset')
@@ -356,6 +378,28 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #6c757d;
   line-height: 1.4;
+}
+
+.name-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  background: #f8f9fa;
+  color: #495057;
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.name-input:focus {
+  border-color: #4a6cf7;
+  background: #fff;
+}
+
+.name-input::placeholder {
+  color: #adb5bd;
 }
 
 .font-size-control {

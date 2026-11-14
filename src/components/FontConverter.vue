@@ -6,11 +6,24 @@
         <h1 class="logo">LittleHanzi</h1>
       </div>
       <div class="header-buttons">
+        <!-- Save Button -->
+        <button
+          class="save-icon-btn"
+          @click="handleManualSave"
+          title="Save Article"
+          :disabled="!inputText.trim() || isSaving"
+        >
+          <Save :size="20" />
+        </button>
+
         <button class="history-icon-btn" @click="openHistoryModal" title="Reading History">
           <BookOpen :size="22" />
         </button>
         <button class="settings-icon-btn" @click="openSettingsModal" title="Settings">
           <Settings :size="24" />
+        </button>
+        <button class="info-icon-btn" @click="openInfoModal" title="Information">
+          <Info :size="22" />
         </button>
       </div>
     </div>
@@ -20,22 +33,59 @@
       :articles="articles"
       :isCurrentArticle="isCurrentArticle"
       :formatDate="formatDate"
+      :getLikeCount="getLikeCount"
       @close="closeHistoryModal"
       @load-article="loadArticleIntoEditor"
       @delete-article="handleDeleteArticle"
       @delete-all="handleDeleteAllArticles"
+      @toggle-archive="handleToggleArchive"
+    />
+
+    <!-- Info Modal -->
+    <InfoModal
+      :isOpen="isInfoModalOpen"
+      @close="closeInfoModal"
+      @notify="showToastMessage"
     />
 
     <div class="main-content">
       <LoadingSpinner :isLoading="isLoading" :text="loadingText" />
+
+      <!-- Toast notification -->
+      <div v-if="showSaveToast" class="toast" :class="`toast-${toastType}`">
+        <span>{{ toastMessage }}</span>
+      </div>
+
+      <!-- "Continue where you left off" prompt -->
+      <Transition name="resume">
+        <div v-if="resumeArticle" class="resume-banner">
+          <div class="resume-icon"><BookMarked :size="20" /></div>
+          <div class="resume-copy">
+            <strong>Continue where you left off?</strong>
+            <p>
+              Last time you left <em>“{{ resumeArticle.title }}”</em> mid-reading.
+              Your bookmark is at paragraph {{ Number(resumeArticle.bookmark) + 1 }}.
+            </p>
+          </div>
+          <div class="resume-actions">
+            <button class="resume-primary" @click="resumeReading">
+              Continue reading
+            </button>
+            <button class="resume-dismiss" @click="dismissResume">Not now</button>
+          </div>
+        </div>
+      </Transition>
+
       <div class="input-display-row">
         <!-- Chinese Text Input -->
         <div class="text-section" :style="{fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
           <div class="input-wrapper">
             <textarea 
+              ref="chineseTextareaRef"
               v-model="inputText" 
               placeholder="Enter Chinese text here..." 
               class="text-input w-full" 
+              @input="handleChineseInput"
             ></textarea>
             <button 
               v-if="inputText.trim()" 
@@ -47,7 +97,7 @@
             </button>
           </div>
           <button @click="clearOrPasteText('chinese')" class="action-btn">
-            {{ inputText.trim() ? 'Clear' : 'Paste' }}
+            {{ pasteButtonLabel(inputText) }}
           </button>
         </div>
 
@@ -55,6 +105,7 @@
         <div class="text-section" :style="{fontSize: `${fontSize}px` }">
           <div class="input-wrapper">
             <textarea 
+              ref="englishTextareaRef"
               v-model="englishText" 
               placeholder="Enter English translation here..." 
               class="text-input w-full english-input" 
@@ -69,7 +120,7 @@
             </button>
           </div>
           <button @click="clearOrPasteText('english')" class="action-btn">
-            {{ englishText.trim() ? 'Clear' : 'Paste' }}
+            {{ pasteButtonLabel(englishText) }}
           </button>
         </div>
       </div>
@@ -98,7 +149,12 @@
         <div class="comparison-display relative">
           <!-- Old rendering method (paragraph by paragraph) -->
           <template v-if="!interleaveLines">
-            <div v-for="(block, sentenceId) in comparisonData" :key="sentenceId" class="comparison-block relative">
+            <div
+              v-for="(block, sentenceId) in comparisonData"
+              :key="sentenceId"
+              class="comparison-block relative"
+              :data-paragraph-index="sentenceId"
+            >
               
               <!-- Render based on display order and visibility toggles -->
               <template v-if="displayOrder === 'en-cn'">
@@ -109,7 +165,42 @@
                   </div>
                 </div>
 
-                <div v-if="showChinese" class="line-container">
+                <div
+                  v-if="showChinese"
+                  class="line-container"
+                  :class="{ 'is-focused': focusedParagraph === sentenceId }"
+                  @click="handleParagraphClick(sentenceId)"
+                >
+                  <div class="paragraph-topline">
+                    <span class="lang-badge">CN</span>
+                  </div>
+                  <div class="paragraph-actions">
+                    <button
+                      v-if="focusedParagraph === sentenceId"
+                      class="paragraph-like-btn"
+                      :class="{ 'is-liked': isLikedParagraph(sentenceId) }"
+                      @click.stop="toggleLike(sentenceId)"
+                      :title="isLikedParagraph(sentenceId) ? 'Remove like from this paragraph' : 'Like this paragraph'"
+                    >
+                      <Heart :size="14" :fill="isLikedParagraph(sentenceId) ? 'currentColor' : 'none'" />
+                    </button>
+                    <button
+                      v-if="currentBookmark === sentenceId"
+                      class="bookmark-btn is-active"
+                      @click.stop="toggleBookmark(sentenceId)"
+                      title="Remove bookmark"
+                    >
+                      <Bookmark :size="14" fill="currentColor" />
+                    </button>
+                    <button
+                      v-if="focusedParagraph === sentenceId && currentBookmark !== sentenceId"
+                      class="paragraph-menu-btn"
+                      @click.stop="toggleParagraphMenu(sentenceId, $event)"
+                      title="More actions"
+                    >
+                      <MoreVertical :size="14" />
+                    </button>
+                  </div>
                   <div class="text-line relative">
                     <div class="line-characters-and-pinyin" :style="{ fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
                       <span v-for="(pair, pairIndex) in flattenBlockLines(block)" :key="pairIndex">
@@ -127,7 +218,42 @@
 
               <template v-else>
                 <!-- Chinese first, then English -->
-                <div v-if="showChinese" class="line-container">
+                <div
+                  v-if="showChinese"
+                  class="line-container"
+                  :class="{ 'is-focused': focusedParagraph === sentenceId }"
+                  @click="handleParagraphClick(sentenceId)"
+                >
+                  <div class="paragraph-topline">
+                    <span class="lang-badge">CN</span>
+                  </div>
+                  <div class="paragraph-actions">
+                    <button
+                      v-if="focusedParagraph === sentenceId"
+                      class="paragraph-like-btn"
+                      :class="{ 'is-liked': isLikedParagraph(sentenceId) }"
+                      @click.stop="toggleLike(sentenceId)"
+                      :title="isLikedParagraph(sentenceId) ? 'Remove like from this paragraph' : 'Like this paragraph'"
+                    >
+                      <Heart :size="14" :fill="isLikedParagraph(sentenceId) ? 'currentColor' : 'none'" />
+                    </button>
+                    <button
+                      v-if="currentBookmark === sentenceId"
+                      class="bookmark-btn is-active"
+                      @click.stop="toggleBookmark(sentenceId)"
+                      title="Remove bookmark"
+                    >
+                      <Bookmark :size="14" fill="currentColor" />
+                    </button>
+                    <button
+                      v-if="focusedParagraph === sentenceId && currentBookmark !== sentenceId"
+                      class="paragraph-menu-btn"
+                      @click.stop="toggleParagraphMenu(sentenceId, $event)"
+                      title="More actions"
+                    >
+                      <MoreVertical :size="14" />
+                    </button>
+                  </div>
                   <div class="text-line relative">
                     <div class="line-characters-and-pinyin" :style="{ fontFamily: getFontFamily, fontSize: `${fontSize}px` }">
                       <span v-for="(pair, pairIndex) in flattenBlockLines(block)" :key="pairIndex">
@@ -155,7 +281,46 @@
           <!-- New interleaved rendering method -->
           <template v-else>
             <div v-if="interleavedDisplayData && interleavedDisplayData.length" class="interleaved-container">
-              <div v-for="(block, blockIndex) in interleavedDisplayData" :key="blockIndex" class="interleaved-block">
+              <div
+                v-for="(block, blockIndex) in interleavedDisplayData"
+                :key="blockIndex"
+                class="interleaved-block"
+                :class="{ 'is-focused': focusedParagraph === blockIndex }"
+                :data-paragraph-index="blockIndex"
+                @click="handleParagraphClick(blockIndex)"
+              >
+                <div class="paragraph-topline">
+                  <span class="lang-badge">{{ showChinese ? 'CN' : 'EN' }}</span>
+                  <span v-if="showChinese" class="paragraph-hint">double-tap to bookmark</span>
+                </div>
+                <div class="paragraph-actions">
+                  <button
+                    v-if="focusedParagraph === blockIndex"
+                    class="paragraph-like-btn"
+                    :class="{ 'is-liked': isLikedParagraph(blockIndex) }"
+                    @click.stop="toggleLike(blockIndex)"
+                    :title="isLikedParagraph(blockIndex) ? 'Remove like from this paragraph' : 'Like this paragraph'"
+                  >
+                    <Heart :size="14" :fill="isLikedParagraph(blockIndex) ? 'currentColor' : 'none'" />
+                  </button>
+                  <button
+                    v-if="currentBookmark === blockIndex"
+                    class="bookmark-btn is-active"
+                    @click.stop="toggleBookmark(blockIndex)"
+                    title="Remove bookmark"
+                  >
+                    <Bookmark :size="14" fill="currentColor" />
+                  </button>
+                  <button
+                    v-if="focusedParagraph === blockIndex && currentBookmark !== blockIndex"
+                    class="paragraph-menu-btn"
+                    @click.stop="toggleParagraphMenu(blockIndex, $event)"
+                    title="More actions"
+                  >
+                    <MoreVertical :size="14" />
+                  </button>
+                </div>
+
                 <div v-for="(line, lineIndex) in block" :key="lineIndex" 
                      :class="['interleaved-line', line.type]"
                      :style="{
@@ -200,25 +365,73 @@
       @confirm="confirmClearAll"
       @cancel="cancelClearAll"
     />
+
+    <!-- Teleported paragraph ⋮ menu -->
+    <Teleport to="body">
+      <div
+        v-if="openMenuParagraph !== null && menuPosition"
+        class="paragraph-menu paragraph-menu--teleported"
+        :style="{ top: menuPosition.top + 'px', left: menuPosition.left + 'px' }"
+        @click.stop
+      >
+        <button
+          class="paragraph-menu-item"
+          @click.stop="bookmarkFromMenu(openMenuParagraph)"
+        >
+          <Bookmark :size="14" />
+          Bookmark
+        </button>
+        <button
+          class="paragraph-menu-item"
+          @click.stop="editParagraphFromMenu(openMenuParagraph)"
+        >
+          <PencilLine :size="14" />
+          Edit paragraph
+        </button>
+        <button
+          class="paragraph-menu-item"
+          @click.stop="copyParagraph(openMenuParagraph)"
+        >
+          <Copy :size="14" />
+          Copy
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script>
 import ArticleHistoryModal from './ArticleHistoryModal.vue';
+import InfoModal from './InfoModal.vue';
 import { useArticleHistory } from '../composables/useArticleHistory';
-import { Edit as EditIcon, Settings, BookOpen } from 'lucide-vue-next';
+import {
+  Edit as EditIcon,
+  Settings,
+  BookOpen,
+  Save,
+  Info,
+  Bookmark,
+  BookMarked,
+  MoreVertical,
+  Heart,
+  PencilLine,
+  Copy,
+} from 'lucide-vue-next';
 import EditModal from './EditModal.vue';
 import ConfirmModal from './ConfirmModal.vue';
 import SettingsModal from './SettingsModal.vue';
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { pinyin } from 'pinyin-pro';
 import LoadingSpinner from './LoadingSpinner.vue'; // Import the loading component
 import { useSettings } from '../composables/useSettings';
+import { splitParagraphs, normalizeParagraphBreaks, getParagraphRanges } from '../utils/textProcessing';
+import { copyText, isFirefox } from '../utils/clipboard';
 
 
 export default {
   components: {
     ArticleHistoryModal,
+    InfoModal,
     EditModal,
     ConfirmModal,
     SettingsModal,
@@ -237,29 +450,56 @@ export default {
       showChinese,
       displayOrder,
       interleaveLines,
+      displayName,
       resetSettings
     } = useSettings()
 
     const {
       articles,
+      currentArticleId,
+      createArticle,
+      updateArticle,
+      setCurrentArticle,
+      clearCurrentArticle,
+      flushAutoSave,
       scheduleAutoSave,
       cancelAutoSave,
-      saveCurrentArticle,
       deleteArticle,
       deleteAllArticles,
-      loadArticle,
       isCurrentArticle,
       formatDate,
-      resetCurrentTracking
+      isSaving,
+      setBookmark,
+      getResumeArticle,
+      clearLastSession,
+      markArticleRead,
+      toggleParagraphLike,
+      isParagraphLiked,
+      getLikeCount,
+      toggleArchived
     } = useArticleHistory()
     
     const inputText = ref('');
     const englishText = ref('');
+    const chineseTextareaRef = ref(null);
+    const englishTextareaRef = ref(null);
+    const firefoxBrowser = isFirefox();
+    const pasteButtonLabel = (text) => {
+      if (text.trim()) return 'Clear';
+      return firefoxBrowser ? 'Paste manually' : 'Paste';
+    };
+
     const showConfirmModal = ref(false);
     const isSettingsModalOpen = ref(false);
+    const isInfoModalOpen = ref(false);
     const containerWidth = ref(800); // Default container width
     const isLoading = ref(false); // Add loading state
     const loadingText = ref('Processing...'); // Add loading text
+
+    const showSaveToast = ref(false);
+    const toastMessage = ref('');
+    const toastType = ref('success');
+    let toastTimeout = null;
 
     const isEditModalOpen = ref(false)
     const editModalType = ref('chinese')
@@ -270,6 +510,25 @@ export default {
     // Add these refs:
     const isHistoryModalOpen = ref(false)
     const lastSavedContent = ref({ chinese: '', english: '' })
+    const resumeArticle = ref(null)
+
+    // Bookmark & paragraph menu state
+    const currentBookmark = ref(null)
+    const pendingBookmark = ref(null)
+    const focusedParagraph = ref(null)
+    const openMenuParagraph = ref(null)
+    const menuPosition = ref(null)
+
+    // ---------- Toast ----------
+    const showToastMessage = (message, type = 'success', duration = 3200) => {
+      toastMessage.value = message
+      toastType.value = type
+      showSaveToast.value = true
+      if (toastTimeout) clearTimeout(toastTimeout)
+      toastTimeout = setTimeout(() => {
+        showSaveToast.value = false
+      }, duration)
+    }
 
     // Add watchers for auto-save
     watch([inputText, englishText], ([newChinese, newEnglish]) => {
@@ -278,7 +537,6 @@ export default {
         lastSavedContent.value = { chinese: newChinese, english: newEnglish }
       } else {
         cancelAutoSave()
-        resetCurrentTracking()
       }
     }, { deep: true })
 
@@ -291,21 +549,279 @@ export default {
       isHistoryModalOpen.value = false
     }
 
-    const loadArticleIntoEditor = (article) => {
-      inputText.value = article.chineseContent
+    const openInfoModal = () => {
+      isInfoModalOpen.value = true
+    }
+
+    const closeInfoModal = () => {
+      isInfoModalOpen.value = false
+    }
+
+    const scrollToBookmark = (paragraphIndex) => {
+      const index = Number(paragraphIndex)
+      const el = document.querySelector(`[data-paragraph-index="${index}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+
+    const loadArticleIntoEditor = async (article) => {
+      isLoading.value = true
+      loadingText.value = 'Loading article...'
+      await new Promise((resolve) => setTimeout(resolve, 200))
+
+      const bookmark =
+        article.bookmark === null || article.bookmark === undefined
+          ? null
+          : Number(article.bookmark)
+
+      inputText.value = article.chineseContent || ''
       englishText.value = article.englishContent || ''
-      // Cancel any pending auto-save for previous content
+      currentBookmark.value = Number.isFinite(bookmark) ? bookmark : null
+      resumeArticle.value = null
       cancelAutoSave()
-      // Reset tracking for new article
-      resetCurrentTracking()
+      setCurrentArticle(article.id)
+      markArticleRead(article.id)
+
+      isLoading.value = false
+
+      if (currentBookmark.value !== null) {
+        if (comparisonData.value[currentBookmark.value]) {
+          await nextTick()
+          scrollToBookmark(currentBookmark.value)
+        } else {
+          pendingBookmark.value = currentBookmark.value
+        }
+      }
+    }
+
+    const resumeReading = async () => {
+      const article = resumeArticle.value
+      if (!article) return
+      await loadArticleIntoEditor(article)
+    }
+
+    const dismissResume = () => {
+      clearLastSession()
+      resumeArticle.value = null
+    }
+
+    const handleChineseInput = () => {
+      // The reader has started typing/pasting something else — stop offering the
+      // old article in the banner. The history entry is untouched.
+      if (resumeArticle.value) resumeArticle.value = null
     }
 
     const handleDeleteArticle = (articleId) => {
+      const wasCurrent = isCurrentArticle(articleId)
       deleteArticle(articleId)
+      if (wasCurrent) {
+        currentBookmark.value = null
+        pendingBookmark.value = null
+        focusedParagraph.value = null
+        closeParagraphMenu()
+      }
     }
 
     const handleDeleteAllArticles = () => {
       deleteAllArticles()
+      currentBookmark.value = null
+      pendingBookmark.value = null
+      focusedParagraph.value = null
+      closeParagraphMenu()
+    }
+
+    const handleToggleArchive = (articleId) => {
+      const archived = toggleArchived(articleId)
+      showToastMessage(
+        archived ? '🗄️ Article archived' : 'Article restored from archive',
+        'info'
+      )
+    }
+
+    // ---------- Manual save ----------
+    const handleManualSave = () => {
+      if (!inputText.value.trim()) return
+
+      let article
+      if (currentArticleId.value) {
+        flushAutoSave(inputText.value, englishText.value)
+        article = updateArticle(currentArticleId.value, {
+          chineseContent: inputText.value,
+          englishContent: englishText.value
+        })
+      } else {
+        article = createArticle(inputText.value, englishText.value)
+      }
+
+      if (article) {
+        resumeArticle.value = null
+        currentBookmark.value =
+          article.bookmark === null || article.bookmark === undefined
+            ? null
+            : Number(article.bookmark)
+        showToastMessage('🀄 Article saved successfully!')
+      }
+    }
+
+    // ---------- Bookmark toggle ----------
+    const toggleBookmark = (paragraphIndex) => {
+      const index = Number(paragraphIndex)
+      if (!currentArticleId.value) {
+        const article = createArticle(inputText.value, englishText.value)
+        if (!article) return
+      }
+      if (!currentArticleId.value) return
+
+      const nextBookmark = currentBookmark.value === index ? null : index
+      currentBookmark.value = nextBookmark
+      setBookmark(currentArticleId.value, nextBookmark)
+    }
+
+    // ---------- Paragraph likes ----------
+    const isLikedParagraph = (paragraphIndex) => {
+      if (!currentArticleId.value) return false
+      return isParagraphLiked(currentArticleId.value, paragraphIndex)
+    }
+
+    const toggleLike = (paragraphIndex) => {
+      if (!currentArticleId.value) {
+        const article = createArticle(inputText.value, englishText.value)
+        if (!article) return
+      }
+      if (!currentArticleId.value) return
+
+      const liked = toggleParagraphLike(currentArticleId.value, paragraphIndex)
+      showToastMessage(
+        liked ? '❤️ Paragraph liked' : 'Like removed',
+        liked ? 'success' : 'info'
+      )
+    }
+
+    // ---------- Paragraph focus & menu ----------
+    // One click focuses a paragraph. A quick second click on the same paragraph
+    // bookmarks it. Handling both gestures here avoids relying on the browser's
+    // native dblclick, which loses the second tap when focus re-renders the
+    // paragraph actions.
+    const DOUBLE_ACTIVATION_MS = 500
+    let lastParagraphTap = { index: null, time: 0 }
+
+    const handleParagraphClick = (index) => {
+      const now = Date.now()
+      const isSecondTap =
+        lastParagraphTap.index === index &&
+        now - lastParagraphTap.time <= DOUBLE_ACTIVATION_MS
+
+      focusedParagraph.value = index
+
+      if (isSecondTap) {
+        lastParagraphTap = { index: null, time: 0 }
+        toggleBookmark(index)
+        return
+      }
+
+      lastParagraphTap = { index, time: now }
+    }
+
+    const closeParagraphMenu = () => {
+      openMenuParagraph.value = null
+      menuPosition.value = null
+    }
+
+    const toggleParagraphMenu = (index, event) => {
+      if (openMenuParagraph.value === index) {
+        closeParagraphMenu()
+        return
+      }
+      openMenuParagraph.value = index
+      focusedParagraph.value = index
+
+      const btn = event?.currentTarget
+      if (btn) {
+        const rect = btn.getBoundingClientRect()
+        const MENU_WIDTH = 210
+        const MENU_HEIGHT = 140
+        const MARGIN = 8
+
+        const left = Math.min(
+          window.innerWidth - MENU_WIDTH - MARGIN,
+          Math.max(MARGIN, rect.right - MENU_WIDTH)
+        )
+
+        const spaceBelow = window.innerHeight - rect.bottom
+        const top =
+          spaceBelow >= MENU_HEIGHT + MARGIN
+            ? rect.bottom + 4
+            : rect.top - MENU_HEIGHT - 4
+
+        menuPosition.value = { top, left }
+      }
+    }
+
+    const handleDocumentClick = (e) => {
+      const inside = e.target.closest(
+        '.line-container, .interleaved-block, .paragraph-menu'
+      )
+      if (!inside) {
+        focusedParagraph.value = null
+        lastParagraphTap = { index: null, time: 0 }
+        closeParagraphMenu()
+      }
+    }
+
+    const handleKeydown = (e) => {
+      if (e.key === 'Escape') {
+        closeParagraphMenu()
+        focusedParagraph.value = null
+        lastParagraphTap = { index: null, time: 0 }
+      }
+    }
+
+    // ---------- Menu actions ----------
+    const bookmarkFromMenu = (index) => {
+      toggleBookmark(index)
+      closeParagraphMenu()
+    }
+
+    const editParagraphFromMenu = (index) => {
+      const block = comparisonData.value[index]
+      if (!block) return
+
+      closeParagraphMenu()
+      focusedParagraph.value = null
+
+      const ranges = getParagraphRanges(inputText.value)
+      const range = ranges[index]
+      if (!range) return
+
+      nextTick(() => {
+        const el = chineseTextareaRef.value
+        if (!el) return
+
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.focus({ preventScroll: true })
+        el.setSelectionRange(range.start, range.end)
+
+        const before = inputText.value.slice(0, range.start)
+        const lineCount = before.split('\n').length - 1
+        const computedStyle = window.getComputedStyle(el)
+        const lineHeight = parseFloat(computedStyle.lineHeight) || Number(fontSize.value) * 1.4
+        el.scrollTop = Math.max(0, lineCount * lineHeight - el.clientHeight / 2)
+      })
+
+      showToastMessage('Paragraph selected in the editor above.', 'info')
+    }
+
+    const copyParagraph = async (index) => {
+      const block = comparisonData.value[index]
+      if (!block?.raw) return
+
+      if (await copyText(block.raw)) {
+        showToastMessage('📋 Paragraph copied!')
+      } else {
+        showToastMessage('Failed to copy paragraph.', 'error')
+      }
+      closeParagraphMenu()
     }
 
     // Settings object for modal
@@ -316,7 +832,8 @@ export default {
       showEnglish: showEnglish.value,
       showChinese: showChinese.value,
       displayOrder: displayOrder.value,
-      interleaveLines: interleaveLines.value
+      interleaveLines: interleaveLines.value,
+      displayName: displayName.value
     }))
 
     // Update container width on resize
@@ -387,20 +904,6 @@ export default {
       return lines
     }
 
-    // Convert Chinese text to HTML with pinyin
-    const getChineseWithPinyinHTML = (chineseText) => {
-      if (!chineseText) return ''
-      if (!showPinyin.value) return chineseText
-      
-      const pairs = getPinyinAndChar(chineseText)
-      return pairs.map(pair => {
-        if (pair[1]) {
-          return `<span class="chinese-with-pinyin">${pair[0]}<span class="inline-pinyin">${pair[1]}</span></span>`
-        }
-        return pair[0]
-      }).join(' ')
-    }
-
     // Get Chinese text as plain string with pinyin
     const getChineseWithPinyinText = (chineseText) => {
       if (!chineseText) return ''
@@ -414,8 +917,8 @@ export default {
     const interleavedDisplayData = computed(() => {
       if (!interleaveLines.value || !inputText.value.trim()) return null
       
-      const chineseParagraphs = inputText.value.split(/\n\n/).filter(p => p.trim())
-      const englishParagraphs = englishText.value.split(/\n\n/).filter(p => p.trim())
+      const chineseParagraphs = splitParagraphs(inputText.value)
+      const englishParagraphs = splitParagraphs(englishText.value)
       
       // Update container width
       nextTick(() => updateContainerWidth())
@@ -469,9 +972,6 @@ export default {
               })
             }
             if (lineIndex < chineseLines.length && showChinese.value) {
-              // For Chinese, we need to preserve the pinyin formatting
-              const originalChinesePara = getChineseWithPinyinHTML(chinesePara)
-              // This is simplified - we'd need to map lines back to original
               interleaved.push({
                 type: 'chinese',
                 content: chineseLines[lineIndex]
@@ -536,7 +1036,8 @@ export default {
       showChinese.value = newSettings.showChinese
       displayOrder.value = newSettings.displayOrder
       interleaveLines.value = newSettings.interleaveLines
-      closeSettingsModal()
+      displayName.value = (newSettings.displayName || '').slice(0, 40)
+      // Keep the modal open for live preview; the Close button dismisses it.
       // Recalculate lines when settings change
       nextTick(() => updateContainerWidth())
     }
@@ -557,9 +1058,9 @@ export default {
 
     const saveEditModalContent = (newContent) => {
       if (editModalType.value === 'chinese') {
-        inputText.value = newContent
+        inputText.value = normalizeParagraphBreaks(newContent)
       } else {
-        englishText.value = newContent
+        englishText.value = normalizeParagraphBreaks(newContent)
       }
       closeEditModal()
     }
@@ -605,22 +1106,48 @@ export default {
       return breakEnglishText(englishText.value, comparisonData.value);
     });
 
-    // const pasteFromClipboard = async (target = null) => {
-    //   try {
-    //     const clipboardText = await navigator.clipboard.readText();
-    //     const targetType = target || 'chinese';
-        
-    //     if (targetType === 'chinese') {
-    //       inputText.value = clipboardText;
-    //     } else {
-    //       englishText.value = clipboardText;
-    //     }
-    //   } catch (error) {
-    //     console.error('Failed to read clipboard contents: ', error);
-    //   }
-    // };
+    // Firefox always asks for confirmation before a page can read the clipboard.
+    // Avoid that extra prompt by focusing the right text box and asking for a
+    // normal Ctrl+V / ⌘V paste instead.
+    const focusForManualPaste = (targetType) => {
+      const el =
+        targetType === 'english' ? englishTextareaRef.value : chineseTextareaRef.value
+      if (!el) return
+
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.focus({ preventScroll: true })
+
+      const end = el.value.length
+      try {
+        el.setSelectionRange(end, end)
+      } catch {
+        // The element may not support selection in some browsers.
+      }
+
+      const coarsePointer =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(pointer: coarse)').matches
+      const isMac = /mac|iphone|ipad|ipod/i.test(
+        navigator.platform || navigator.userAgent
+      )
+
+      showToastMessage(
+        coarsePointer
+          ? 'Firefox needs a manual paste. Long-press the text box and choose Paste.'
+          : `Firefox needs a manual paste. Press ${isMac ? '⌘V' : 'Ctrl+V'} now.`,
+        'info',
+        6000
+      )
+    }
 
     const pasteFromClipboard = async (target = null) => {
+      const targetType = target || 'chinese'
+
+      if (firefoxBrowser) {
+        focusForManualPaste(targetType)
+        return
+      }
+
       isLoading.value = true;
       loadingText.value = 'Pasting from clipboard...';
       
@@ -629,7 +1156,6 @@ export default {
         await new Promise(resolve => setTimeout(resolve, 100));
         
         const clipboardText = await navigator.clipboard.readText();
-        const targetType = target || 'chinese';
         
         loadingText.value = 'Processing text...';
         
@@ -638,17 +1164,18 @@ export default {
         await new Promise(resolve => setTimeout(resolve, 50));
         
         if (targetType === 'chinese') {
-          inputText.value = clipboardText;
+          inputText.value = normalizeParagraphBreaks(clipboardText);
         } else {
-          englishText.value = clipboardText;
+          englishText.value = normalizeParagraphBreaks(clipboardText);
         }
+
+        resumeArticle.value = null;
         
         // Small delay to show completion before hiding
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         console.error('Failed to read clipboard contents: ', error);
-        loadingText.value = 'Failed to paste. Try again.';
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        showToastMessage('Could not read the clipboard. Please paste manually.', 'error');
       } finally {
         isLoading.value = false;
       }
@@ -677,7 +1204,11 @@ export default {
       // Reset tracking when clearing
       if (type === 'both' || (type === 'chinese' && !inputText.value.trim())) {
         cancelAutoSave()
-        resetCurrentTracking()
+        clearCurrentArticle()
+        currentBookmark.value = null
+        pendingBookmark.value = null
+        focusedParagraph.value = null
+        closeParagraphMenu()
       }
     }
 
@@ -711,20 +1242,14 @@ export default {
     const comparisonData = computed(() => {
       if (!inputText.value) return {};
       
-      const normalizedText = inputText.value
-        .replace(/\r\n/g, '\n')
-        .replace(/\n\s*\n(\s*\n)*/g, '\n\n');
-      
-      const chineseParagraphs = normalizedText
-        .split(/\n\n/)
-        .map(para => para.trim())
-        .filter(para => para);
+      const chineseParagraphs = splitParagraphs(inputText.value);
       
       const result = {};
       
       chineseParagraphs.forEach((paragraph, index) => {
         const sentenceId = index;
         result[sentenceId] = {
+          raw: paragraph,
           lines: {},
           sentencePinyin: getPinyinForSentence(paragraph)
         };
@@ -849,6 +1374,29 @@ export default {
       })
     }
 
+    // When comparisonData recomputes (fresh parse), satisfy pending bookmark scroll
+    watch(comparisonData, async () => {
+      if (pendingBookmark.value !== null) {
+        const target = pendingBookmark.value
+        pendingBookmark.value = null
+        await nextTick()
+        scrollToBookmark(target)
+      }
+    })
+
+    // ---------- Lifecycle ----------
+    onMounted(() => {
+      resumeArticle.value = getResumeArticle()
+      document.addEventListener('click', handleDocumentClick)
+      document.addEventListener('keydown', handleKeydown)
+    })
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('click', handleDocumentClick)
+      document.removeEventListener('keydown', handleKeydown)
+      if (toastTimeout) clearTimeout(toastTimeout)
+    })
+
     return {
       articles,
       isHistoryModalOpen,
@@ -857,12 +1405,17 @@ export default {
       loadArticleIntoEditor,
       handleDeleteArticle,
       handleDeleteAllArticles,
+      handleToggleArchive,
       isCurrentArticle,
       formatDate,
+      getLikeCount,
 
       // Data
       inputText,
       englishText,
+      chineseTextareaRef,
+      englishTextareaRef,
+      pasteButtonLabel,
       selectedFont,
       fontSize,
       showPinyin,
@@ -870,9 +1423,40 @@ export default {
       showChinese,
       displayOrder,
       interleaveLines,
+      isSaving,
 
       isLoading, // Add to return
       loadingText, // Add to return
+
+      // Toast
+      showSaveToast,
+      toastMessage,
+      toastType,
+      showToastMessage,
+
+      // Resume
+      resumeArticle,
+      resumeReading,
+      dismissResume,
+      handleChineseInput,
+
+      // Save
+      handleManualSave,
+
+      // Paragraph interactions
+      currentBookmark,
+      focusedParagraph,
+      openMenuParagraph,
+      menuPosition,
+      handleParagraphClick,
+      toggleBookmark,
+      toggleLike,
+      isLikedParagraph,
+      toggleParagraphMenu,
+      closeParagraphMenu,
+      bookmarkFromMenu,
+      editParagraphFromMenu,
+      copyParagraph,
       
       // Computed
       getFontFamily,
@@ -889,6 +1473,15 @@ export default {
       // Modal related
       EditIcon,
       Settings,
+      BookOpen,
+      Save,
+      Info,
+      Bookmark,
+      BookMarked,
+      MoreVertical,
+      Heart,
+      PencilLine,
+      Copy,
       isEditModalOpen,
       editModalTitle,
       editModalContent,
@@ -902,6 +1495,11 @@ export default {
       closeSettingsModal,
       saveSettings,
       resetToDefaults,
+
+      // Info modal
+      isInfoModalOpen,
+      openInfoModal,
+      closeInfoModal,
 
       showConfirmModal,
       requestClearAll,
@@ -1336,5 +1934,342 @@ export default {
 .history-icon-btn:hover {
   background: #f8f9fa;
   transform: scale(1.05);
+}
+
+.save-icon-btn,
+.info-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #495057;
+}
+
+.save-icon-btn:hover:not(:disabled),
+.info-icon-btn:hover {
+  background: #f8f9fa;
+  transform: scale(1.05);
+}
+
+.save-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  top: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 3000;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  background: white;
+  border: 1px solid #e9ecef;
+  animation: toastSlideDown 0.3s ease;
+  max-width: min(92vw, 560px);
+  text-align: center;
+}
+
+.toast-success {
+  color: #2f855a;
+  border-color: #c6f6d5;
+}
+
+.toast-error {
+  color: #c53030;
+  border-color: #fed7d7;
+}
+
+.toast-info {
+  color: #3a5ce8;
+  border-color: #d8defb;
+}
+
+@keyframes toastSlideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Resume banner */
+.resume-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  max-width: 1160px;
+  margin: 16px auto 0;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d8defb;
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(74, 108, 247, 0.08);
+}
+
+.resume-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #eef1ff;
+  color: #4a6cf7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.resume-copy {
+  flex: 1;
+  min-width: 200px;
+}
+
+.resume-copy strong {
+  display: block;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.resume-copy p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #6c757d;
+}
+
+.resume-copy em {
+  color: #4a6cf7;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.resume-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.resume-primary,
+.resume-dismiss {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resume-primary {
+  background: #4a6cf7;
+  border: 1px solid #4a6cf7;
+  color: white;
+}
+
+.resume-primary:hover {
+  background: #3a5ce8;
+  transform: translateY(-1px);
+}
+
+.resume-dismiss {
+  background: white;
+  border: 1px solid #e9ecef;
+  color: #6c757d;
+}
+
+.resume-dismiss:hover {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.resume-enter-active,
+.resume-leave-active {
+  transition: all 0.25s ease;
+}
+
+.resume-enter-from,
+.resume-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* Paragraph chrome */
+.line-container {
+  position: relative;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.line-container.is-focused {
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.22), 0 6px 18px rgba(74, 108, 247, 0.1);
+}
+
+.interleaved-block {
+  position: relative;
+  transition: box-shadow 0.2s ease;
+}
+
+.interleaved-block.is-focused {
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.22), 0 6px 18px rgba(74, 108, 247, 0.1);
+}
+
+.paragraph-topline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 16px;
+  margin-bottom: 6px;
+}
+
+.lang-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: #4a6cf7;
+  background: #eef1ff;
+  border: 1px solid #d8defb;
+}
+
+.paragraph-hint {
+  font-size: 10px;
+  color: #b0b7c3;
+}
+
+.paragraph-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 3;
+}
+
+.paragraph-like-btn,
+.bookmark-btn,
+.paragraph-menu-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  background: white;
+  color: #adb5bd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  padding: 0;
+}
+
+.paragraph-like-btn:hover {
+  color: #e11d48;
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.paragraph-like-btn.is-liked {
+  color: #e11d48;
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.bookmark-btn:hover,
+.bookmark-btn.is-active {
+  color: #4a6cf7;
+  border-color: #d8defb;
+  background: #eef1ff;
+}
+
+.paragraph-menu-btn:hover {
+  color: #4a6cf7;
+  border-color: #d8defb;
+  background: #eef1ff;
+}
+
+/* Teleported paragraph menu */
+.paragraph-menu {
+  position: fixed;
+  z-index: 3000;
+  min-width: 170px;
+  padding: 6px;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.18);
+  animation: paragraphMenuIn 0.14s ease;
+}
+
+@keyframes paragraphMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.paragraph-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #495057;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+
+.paragraph-menu-item:hover {
+  background: #f8f9fa;
+  color: #4a6cf7;
+}
+
+@media (max-width: 768px) {
+  .toast {
+    top: 70px;
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+
+  .resume-banner {
+    margin: 12px 8px 0;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .resume-actions {
+    width: 100%;
+  }
+
+  .resume-primary,
+  .resume-dismiss {
+    flex: 1;
+  }
 }
 </style>

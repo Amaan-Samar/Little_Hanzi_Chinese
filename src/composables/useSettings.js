@@ -17,7 +17,8 @@ export function useSettings() {
           showEnglish: parsed.showEnglish ?? true,
           showChinese: parsed.showChinese ?? true,
           displayOrder: parsed.displayOrder ?? 'en-cn',
-          interleaveLines: parsed.interleaveLines ?? true
+          interleaveLines: parsed.interleaveLines ?? true,
+          displayName: typeof parsed.displayName === 'string' ? parsed.displayName.slice(0, 40) : ''
         }
       }
     } catch (error) {
@@ -42,7 +43,8 @@ export function useSettings() {
     showEnglish: true,
     showChinese: true,
     displayOrder: 'en-cn',
-    interleaveLines: true
+    interleaveLines: true,
+    displayName: ''
   }
 
   const savedSettings = loadSettings()
@@ -55,6 +57,7 @@ export function useSettings() {
   const showChinese = ref(savedSettings?.showChinese ?? defaultSettings.showChinese)
   const displayOrder = ref(savedSettings?.displayOrder ?? defaultSettings.displayOrder)
   const interleaveLines = ref(savedSettings?.interleaveLines ?? defaultSettings.interleaveLines)
+  const displayName = ref(savedSettings?.displayName ?? defaultSettings.displayName)
 
   // Save settings whenever any setting changes
   const saveCurrentSettings = () => {
@@ -65,12 +68,13 @@ export function useSettings() {
       showEnglish: showEnglish.value,
       showChinese: showChinese.value,
       displayOrder: displayOrder.value,
-      interleaveLines: interleaveLines.value
+      interleaveLines: interleaveLines.value,
+      displayName: displayName.value
     })
   }
 
   // Watch all settings and save on change
-  watch([fontSize, selectedFont, showPinyin, showEnglish, showChinese, displayOrder, interleaveLines], () => {
+  watch([fontSize, selectedFont, showPinyin, showEnglish, showChinese, displayOrder, interleaveLines, displayName], () => {
     saveCurrentSettings()
   }, { deep: true })
 
@@ -83,6 +87,7 @@ export function useSettings() {
     showChinese.value = defaultSettings.showChinese
     displayOrder.value = defaultSettings.displayOrder
     interleaveLines.value = defaultSettings.interleaveLines
+    displayName.value = defaultSettings.displayName
   }
 
   return {
@@ -93,6 +98,7 @@ export function useSettings() {
     showChinese,
     displayOrder,
     interleaveLines,
+    displayName,
     resetSettings,
     saveCurrentSettings
   }

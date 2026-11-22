@@ -366,6 +366,96 @@ export function useArticleHistory() {
     return setArchived(articleId, !article.archived)
   }
 
+  // ---- import / merge ----
+  // Match on the Chinese body alone: the English translation may arrive in a
+  // later split share, and it should complete the existing article rather
+  // than create a duplicate.
+  const contentKey = (article) => (article?.chineseContent || '').trim()
+
+  /**
+   * Merge shared or backed-up articles into the local library.
+   * Existing articles keep their read/archive/bookmark state while new likes
+   * are unioned in. Shared articles arrive unread and unarchived, while a
+   * full backup restore brings its read/archive flags back.
+   */
+  const importArticles = (
+    incoming,
+    sharedByName = 'A friend',
+    { preserveState = false } = {},
+  ) => {
+    const list = Array.isArray(incoming) ? incoming : []
+    let added = 0
+    let merged = 0
+
+    for (const raw of list) {
+      if (!raw || typeof raw !== 'object') continue
+      const chineseContent = (
+        raw.chineseContent ||
+        raw.content ||
+        raw.koreanContent ||
+        ''
+      ).trim()
+      if (!chineseContent) continue
+
+      const candidate = { ...raw, chineseContent }
+      const key = contentKey(candidate)
+      const existing = articles.value.find(
+        (item) => (raw.id && item.id === raw.id) || contentKey(item) === key,
+      )
+
+      if (existing) {
+        existing.likedParagraphs = normalizeLikes([
+          ...(existing.likedParagraphs || []),
+          ...(raw.likedParagraphs || []),
+        ])
+        // A Chinese-only share can be completed later by a full share.
+        if (
+          String(raw.englishContent || '').trim() &&
+          !String(existing.englishContent || '').trim()
+        ) {
+          existing.englishContent = raw.englishContent
+        }
+        if (!existing.sharedBy) {
+          existing.sharedBy = raw.sharedBy || sharedByName || 'A friend'
+          existing.sharedAt = Number(raw.sharedAt) || Date.now()
+        }
+        merged += 1
+      } else {
+        const article = normalizeArticle(
+          {
+            ...candidate,
+            id: raw.id || generateId(),
+            sharedBy: raw.sharedBy || sharedByName || 'A friend',
+            sharedAt: Number(raw.sharedAt) || Date.now(),
+          },
+          { imported: true },
+        )
+        if (preserveState) {
+          article.read = Boolean(raw.read)
+          article.archived = Boolean(raw.archived)
+        }
+        articles.value.unshift(article)
+        added += 1
+      }
+    }
+
+    articles.value.sort((a, b) => b.timestamp - a.timestamp)
+    if (articles.value.length > MAX_ARTICLES) {
+      articles.value = articles.value.slice(0, MAX_ARTICLES)
+    }
+    if (added || merged) saveArticles()
+    return { added, merged }
+  }
+
+  const importBundle = (bundle) => {
+    if (!bundle || !Array.isArray(bundle.articles)) {
+      return { added: 0, merged: 0 }
+    }
+    return importArticles(bundle.articles, bundle.sharedBy, {
+      preserveState: bundle.kind === 'backup',
+    })
+  }
+
   const formatDate = (timestamp) => {
     const date = new Date(timestamp)
     const now = new Date()
@@ -411,6 +501,9 @@ export function useArticleHistory() {
     getLikeCount,
     setArchived,
     toggleArchived,
+    // import / merge
+    importArticles,
+    importBundle,
     getResumeArticle,
     clearLastSession,
   }

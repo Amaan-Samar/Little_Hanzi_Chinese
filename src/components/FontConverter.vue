@@ -1,23 +1,38 @@
 <template>
-  <div class="converter-wrapper">
+  <div
+    class="converter-wrapper"
+    @dragover.prevent
+    @drop.prevent="handleFileDrop"
+  >
     <!-- Header with Logo and Settings -->
     <div class="app-header">
       <div class="logo-section">
         <h1 class="logo">LittleHanzi</h1>
       </div>
       <div class="header-buttons">
-        <!-- Save Button -->
+        <!-- Only show article actions when there is an article to act on. -->
         <button
+          v-if="inputText.trim()"
           class="save-icon-btn"
           @click="handleManualSave"
           title="Save Article"
-          :disabled="!inputText.trim() || isSaving"
+          :disabled="isSaving"
         >
           <Save :size="20" />
+          <span v-if="isSaving" class="save-spinner"></span>
         </button>
 
-        <button class="history-icon-btn" @click="openHistoryModal" title="Reading History">
-          <BookOpen :size="22" />
+        <button
+          v-if="inputText.trim()"
+          class="share-icon-btn"
+          @click="shareCurrentArticle"
+          title="Share this article"
+        >
+          <Share2 :size="20" />
+        </button>
+
+        <button class="scan-icon-btn" @click="openScanner" title="Scan a QR code">
+          <ScanLine :size="21" />
         </button>
         <button class="settings-icon-btn" @click="openSettingsModal" title="Settings">
           <Settings :size="24" />
@@ -27,20 +42,6 @@
         </button>
       </div>
     </div>
-    <!-- Add History Modal right after Settings Modal -->
-    <ArticleHistoryModal
-      :isOpen="isHistoryModalOpen"
-      :articles="articles"
-      :isCurrentArticle="isCurrentArticle"
-      :formatDate="formatDate"
-      :getLikeCount="getLikeCount"
-      @close="closeHistoryModal"
-      @load-article="loadArticleIntoEditor"
-      @delete-article="handleDeleteArticle"
-      @delete-all="handleDeleteAllArticles"
-      @toggle-archive="handleToggleArchive"
-    />
-
     <!-- Info Modal -->
     <InfoModal
       :isOpen="isInfoModalOpen"
@@ -48,13 +49,43 @@
       @notify="showToastMessage"
     />
 
-    <div class="main-content">
-      <LoadingSpinner :isLoading="isLoading" :text="loadingText" />
+    <!-- Share Modal -->
+    <ShareModal
+      :isOpen="isShareModalOpen"
+      :article="shareTarget"
+      :displayName="profile.name || displayName"
+      @close="closeShareModal"
+      @save-name="handleSaveDisplayName"
+      @notify="showToastMessage"
+    />
 
-      <!-- Toast notification -->
-      <div v-if="showSaveToast" class="toast" :class="`toast-${toastType}`">
-        <span>{{ toastMessage }}</span>
-      </div>
+    <!-- Database / backup Modal -->
+    <BackupModal
+      :isOpen="isBackupModalOpen"
+      :backupSupported="backupSupported"
+      :backupStatus="backupStatus"
+      :backupFileName="backupFileName"
+      :backupLastSaved="backupLastSaved"
+      :articleCount="articles.length"
+      @close="closeBackupModal"
+      @choose-backup="handleChooseBackup"
+      @reconnect-backup="handleReconnectBackup"
+      @disable-backup="handleDisableBackup"
+      @download-backup="handleDownloadBackup"
+      @import-backup="handleImportBackup"
+      @export-share="handleExportShareLibrary"
+    />
+
+    <!-- QR Scanner Modal -->
+    <ScannerModal
+      :isOpen="isScannerModalOpen"
+      @close="closeScanner"
+      @detected="handleScanDetected"
+    />
+
+    <div class="main-content">
+      <div v-show="activeView === 'home'" class="home-view">
+      <LoadingSpinner :isLoading="isLoading" :text="loadingText" />
 
       <!-- "Continue where you left off" prompt -->
       <Transition name="resume">
@@ -160,7 +191,7 @@
               <template v-if="displayOrder === 'en-cn'">
                 <!-- English first, then Chinese -->
                 <div v-if="showEnglish && englishSegments[sentenceId]" class="english-translation-box">
-                  <div class="english-text" :style="{ fontSize: `${fontSize * 0.8}px`, lineHeight: '1.1' }">
+                  <div class="english-text" :style="{ fontSize: `${englishFontSize}px`, lineHeight: '1.5' }">
                     {{ englishSegments[sentenceId] }}
                   </div>
                 </div>
@@ -207,7 +238,7 @@
                         <span class="character" :style="{fontWeight: '600'}">
                           {{ showPinyin ? pair[0] : (pair[0] === ' ' && pair[1] === ' ' ? ' ' : pair[0]) }}
                         </span>
-                        <span class="pinyin" :style="{fontSize: `${fontSize * 0.8}px`, display: showPinyin ? 'inline' : 'none'}">
+                        <span class="pinyin" :style="{fontSize: `${pinyinFontSize}px`, display: showPinyin ? 'inline' : 'none'}">
                           {{ pair[1] }}
                         </span>
                       </span>
@@ -260,7 +291,7 @@
                         <span class="character" :style="{fontWeight: '600'}">
                           {{ showPinyin ? pair[0] : (pair[0] === ' ' && pair[1] === ' ' ? ' ' : pair[0]) }}
                         </span>
-                        <span class="pinyin" :style="{fontSize: `${fontSize * 0.8}px`, display: showPinyin ? 'inline' : 'none'}">
+                        <span class="pinyin" :style="{fontSize: `${pinyinFontSize}px`, display: showPinyin ? 'inline' : 'none'}">
                           {{ pair[1] }}
                         </span>
                       </span>
@@ -269,7 +300,7 @@
                 </div>
 
                 <div v-if="showEnglish && englishSegments[sentenceId]" class="english-translation-box">
-                  <div class="english-text" :style="{ fontSize: `${fontSize * 0.8}px`, lineHeight: '1.1' }">
+                  <div class="english-text" :style="{ fontSize: `${englishFontSize}px`, lineHeight: '1.5' }">
                     {{ englishSegments[sentenceId] }}
                   </div>
                 </div>
@@ -324,7 +355,7 @@
                 <div v-for="(line, lineIndex) in block" :key="lineIndex" 
                      :class="['interleaved-line', line.type]"
                      :style="{
-                       fontSize: line.type === 'chinese' ? `${fontSize}px` : `${fontSize * 0.8}px`,
+                       fontSize: line.type === 'chinese' ? `${fontSize}px` : `${englishFontSize}px`,
                        fontFamily: line.type === 'chinese' ? getFontFamily : '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif'
                      }">
                   <span v-if="line.type === 'chinese'" v-html="line.content"></span>
@@ -353,7 +384,54 @@
       <div v-else-if="inputText.trim() && !showEnglish && !showChinese" class="empty-state">
         <p>Both English and Chinese paragraphs are hidden. Enable them in settings.</p>
       </div>
+      </div><!-- /home-view -->
+
+      <!-- History tab -->
+      <div v-show="activeView === 'history'" class="history-view">
+        <ArticleHistoryModal
+          embedded
+          :articles="articles"
+          :isCurrentArticle="isCurrentArticle"
+          :formatDate="formatDate"
+          :getLikeCount="getLikeCount"
+          @load-article="loadArticleIntoEditor"
+          @delete-article="handleDeleteArticle"
+          @delete-all="handleDeleteAllArticles"
+          @share-article="openShareModal"
+          @toggle-archive="handleToggleArchive"
+          @open-backup="openBackupModal"
+          @import-file="handleImportBackup"
+        />
+      </div>
+
+      <!-- Profile tab -->
+      <div v-show="activeView === 'profile'" class="profile-view">
+        <ProfilePanel
+          :profile="profile"
+          :backupSupported="backupSupported"
+          :backupStatus="backupStatus"
+          :backupFileName="backupFileName"
+          :backupLastSaved="backupLastSaved"
+          :articleCount="articles.length"
+          @update-profile="updateProfile"
+          @reset-profile="handleResetProfile"
+          @choose-backup="handleChooseBackup"
+          @reconnect-backup="handleReconnectBackup"
+          @disable-backup="handleDisableBackup"
+          @download-backup="handleDownloadBackup"
+          @import-backup="handleImportBackup"
+          @export-share="handleExportShareLibrary"
+          @scan-qr="openScanner"
+        />
+      </div>
     </div>
+
+    <!-- Toast notification: global, so every tab and modal can show it. -->
+    <div v-if="showSaveToast" class="toast" :class="`toast-${toastType}`">
+      <span>{{ toastMessage }}</span>
+    </div>
+
+    <BottomNav v-model="activeView" />
 
     <!-- Confirmation Modal -->
     <ConfirmModal
@@ -407,7 +485,6 @@ import { useArticleHistory } from '../composables/useArticleHistory';
 import {
   Edit as EditIcon,
   Settings,
-  BookOpen,
   Save,
   Info,
   Bookmark,
@@ -416,16 +493,34 @@ import {
   Heart,
   PencilLine,
   Copy,
+  Share2,
+  ScanLine,
 } from 'lucide-vue-next';
 import EditModal from './EditModal.vue';
 import ConfirmModal from './ConfirmModal.vue';
 import SettingsModal from './SettingsModal.vue';
+import ShareModal from './ShareModal.vue';
+import BackupModal from './BackupModal.vue';
+import ScannerModal from './ScannerModal.vue';
+import BottomNav from './BottomNav.vue';
+import ProfilePanel from './ProfilePanel.vue';
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { pinyin } from 'pinyin-pro';
 import LoadingSpinner from './LoadingSpinner.vue'; // Import the loading component
 import { useSettings } from '../composables/useSettings';
+import { useBackup } from '../composables/useBackup';
+import { useProfile } from '../composables/useProfile';
 import { splitParagraphs, normalizeParagraphBreaks, getParagraphRanges } from '../utils/textProcessing';
 import { copyText, isFirefox } from '../utils/clipboard';
+import {
+  makeBackupBundle,
+  makeShareBundle,
+  parseBundle,
+  parseShareHash,
+  parseScannedValue,
+  downloadJson,
+  contentSignature,
+} from '../utils/sharePayload';
 
 
 export default {
@@ -435,10 +530,26 @@ export default {
     EditModal,
     ConfirmModal,
     SettingsModal,
+    ShareModal,
+    BackupModal,
+    ScannerModal,
+    BottomNav,
+    ProfilePanel,
     LoadingSpinner,
-    BookOpen,
+    // Options API components must be registered here. Returning an icon from
+    // setup() only exposes it as data, so the template cannot render it.
     EditIcon,
     Settings,
+    Save,
+    Info,
+    Bookmark,
+    BookMarked,
+    MoreVertical,
+    Heart,
+    PencilLine,
+    Copy,
+    Share2,
+    ScanLine,
   },
   name: 'FontConverter',
   setup() {
@@ -450,6 +561,8 @@ export default {
       showChinese,
       displayOrder,
       interleaveLines,
+      pinyinFontSize,
+      englishFontSize,
       displayName,
       resetSettings
     } = useSettings()
@@ -476,9 +589,38 @@ export default {
       toggleParagraphLike,
       isParagraphLiked,
       getLikeCount,
-      toggleArchived
+      toggleArchived,
+      importBundle
     } = useArticleHistory()
-    
+
+    const {
+      backupSupported,
+      backupFileName,
+      backupStatus,
+      backupLastSaved,
+      initBackup,
+      chooseBackupFile,
+      reconnectBackup,
+      disableBackup,
+      scheduleBackup,
+      downloadBackup,
+      pickImportFile,
+    } = useBackup()
+
+    const {
+      name: profileName,
+      email: profileEmail,
+      phone: profilePhone,
+      address: profileAddress,
+      occupation: profileOccupation,
+      resetProfile,
+    } = useProfile()
+
+    // Adopt the old display-name setting the first time the profile is opened.
+    if (!profileName.value && displayName.value) {
+      profileName.value = displayName.value.slice(0, 40)
+    }
+
     const inputText = ref('');
     const englishText = ref('');
     const chineseTextareaRef = ref(null);
@@ -508,9 +650,39 @@ export default {
 
 
     // Add these refs:
+    const activeView = ref('home')
     const isHistoryModalOpen = ref(false)
+    const isShareModalOpen = ref(false)
+    const isBackupModalOpen = ref(false)
+    const isScannerModalOpen = ref(false)
+    const shareTarget = ref(null)
     const lastSavedContent = ref({ chinese: '', english: '' })
     const resumeArticle = ref(null)
+
+    const profile = computed(() => ({
+      name: profileName.value,
+      email: profileEmail.value,
+      phone: profilePhone.value,
+      address: profileAddress.value,
+      occupation: profileOccupation.value,
+    }))
+
+    const updateProfile = (next) => {
+      if (!next) return
+      profileName.value = (next.name || '').slice(0, 40)
+      profileEmail.value = (next.email || '').slice(0, 120)
+      profilePhone.value = (next.phone || '').slice(0, 40)
+      profileAddress.value = (next.address || '').slice(0, 240)
+      profileOccupation.value = (next.occupation || '').slice(0, 80)
+      // Keep sharing and the old settings field in sync with the profile.
+      displayName.value = profileName.value
+    }
+
+    const handleResetProfile = () => {
+      resetProfile()
+      displayName.value = ''
+      showToastMessage('Profile cleared.', 'info')
+    }
 
     // Bookmark & paragraph menu state
     const currentBookmark = ref(null)
@@ -540,8 +712,9 @@ export default {
       }
     }, { deep: true })
 
-    // Add the modal methods:
+    // History lives in its own bottom-nav tab now.
     const openHistoryModal = () => {
+      activeView.value = 'history'
       isHistoryModalOpen.value = true
     }
 
@@ -555,6 +728,309 @@ export default {
 
     const closeInfoModal = () => {
       isInfoModalOpen.value = false
+    }
+
+    // ---------- Sharing ----------
+    const openShareModal = (article) => {
+      if (!article?.chineseContent?.trim()) return
+      shareTarget.value = article
+      isShareModalOpen.value = true
+    }
+
+    const shareCurrentArticle = () => {
+      if (!inputText.value.trim()) return
+
+      const current = currentArticleId.value
+        ? articles.value.find((item) => item.id === currentArticleId.value)
+        : null
+      const firstLine = splitParagraphs(inputText.value)[0] || 'Untitled article'
+      openShareModal({
+        ...(current || {}),
+        title:
+          current?.title ||
+          (firstLine.length > 60 ? `${firstLine.slice(0, 60)}...` : firstLine),
+        chineseContent: inputText.value,
+        englishContent: englishText.value,
+      })
+    }
+
+    const closeShareModal = () => {
+      isShareModalOpen.value = false
+    }
+
+    const handleSaveDisplayName = (name) => {
+      displayName.value = (name || '').slice(0, 40)
+      profileName.value = displayName.value
+    }
+
+    // ---------- Backup / database ----------
+    const datedName = (prefix) =>
+      `${prefix}-${new Date().toISOString().slice(0, 10)}.json`
+
+    const backupData = () => makeBackupBundle(articles.value)
+
+    watch(articles, () => scheduleBackup(backupData), { deep: true })
+
+    const openBackupModal = () => {
+      isBackupModalOpen.value = true
+    }
+
+    const closeBackupModal = () => {
+      isBackupModalOpen.value = false
+    }
+
+    const handleChooseBackup = async () => {
+      const result = await chooseBackupFile(backupData)
+      if (result.ok) {
+        showToastMessage(`Database connected to ${result.fileName}`)
+      } else if (!result.canceled) {
+        showToastMessage(result.error || 'Could not set up the database.', 'error')
+      }
+    }
+
+    const handleReconnectBackup = async () => {
+      const result = await reconnectBackup(backupData)
+      if (result.ok) showToastMessage('Database reconnected.')
+      else showToastMessage(result.error || 'Could not reconnect the database.', 'error')
+    }
+
+    const handleDisableBackup = async () => {
+      await disableBackup()
+      showToastMessage('Database disconnected.', 'info')
+    }
+
+    const handleDownloadBackup = () => {
+      downloadBackup(backupData(), datedName('little-hanzi-chinese-backup'))
+      showToastMessage('Database backup downloaded.')
+    }
+
+    const importBundleText = (text, sourceName = '') => {
+      const parsed = parseBundle(text)
+      if (!parsed.ok) {
+        showToastMessage(parsed.error, 'error')
+        return false
+      }
+
+      const { added, merged } = importBundle(parsed.bundle)
+      if (!added && !merged) {
+        showToastMessage('Nothing new to import.', 'info')
+        return true
+      }
+
+      showToastMessage(
+        `Imported ${added} new ${added === 1 ? 'article' : 'articles'}` +
+          (merged ? `, merged ${merged}.` : '.') +
+          (sourceName ? ` (${sourceName})` : '')
+      )
+      return true
+    }
+
+    const handleImportBackup = async () => {
+      const picked = await pickImportFile()
+      if (!picked.ok) {
+        if (!picked.canceled) {
+          showToastMessage(picked.error || 'Could not read that file.', 'error')
+        }
+        return
+      }
+
+      importBundleText(picked.text, picked.name)
+    }
+
+    const handleFileDrop = async (event) => {
+      const file = event.dataTransfer?.files?.[0]
+      if (!file) return
+
+      if (!/\.json$/i.test(file.name) && file.type !== 'application/json') {
+        showToastMessage('Drop a Little Hanzi .json file.', 'error')
+        return
+      }
+
+      try {
+        importBundleText(await file.text(), file.name)
+        activeView.value = 'history'
+      } catch (error) {
+        console.error('Could not read dropped file:', error)
+        showToastMessage('Could not read that file.', 'error')
+      }
+    }
+
+    const handleExportShareLibrary = () => {
+      const bundle = makeShareBundle(
+        articles.value,
+        profileName.value || displayName.value || 'A friend'
+      )
+      downloadJson(bundle, datedName('little-hanzi-chinese-library'))
+      showToastMessage('Library bundle downloaded. Send it to a friend!')
+    }
+
+    // ---------- Incoming shares & QR scanning ----------
+    const PENDING_EN_KEY = 'littleHanzi_pendingEnglish'
+
+    const readPendingEnglish = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(PENDING_EN_KEY) || '{}')
+        return parsed && typeof parsed === 'object' ? parsed : {}
+      } catch {
+        return {}
+      }
+    }
+
+    const writePendingEnglish = (pending) => {
+      try {
+        if (Object.keys(pending).length) {
+          localStorage.setItem(PENDING_EN_KEY, JSON.stringify(pending))
+        } else {
+          localStorage.removeItem(PENDING_EN_KEY)
+        }
+      } catch {
+        // Pending translations are a convenience; ignore storage failures.
+      }
+    }
+
+    const applyIncomingShare = async (shared) => {
+      if (!shared) return false
+
+      const hash = shared.contentHash
+      const findChineseArticle = () =>
+        articles.value.find(
+          (article) => contentSignature(article.chineseContent) === hash
+        )
+
+      // ---- English half of a split share ----
+      if (shared.part === 'en') {
+        const target = findChineseArticle()
+
+        if (!target) {
+          const pending = readPendingEnglish()
+          pending[hash] = {
+            en: shared.englishContent,
+            by: shared.sharedBy,
+            at: shared.sharedAt,
+          }
+          writePendingEnglish(pending)
+          showToastMessage(
+            'English saved. Now scan the Chinese QR to complete the article.',
+            'info'
+          )
+          return true
+        }
+
+        if (String(target.englishContent || '').trim()) {
+          await loadArticleIntoEditor(target)
+          showToastMessage(
+            `${shared.sharedBy} shared a translation you already have.`,
+            'info'
+          )
+          return true
+        }
+
+        updateArticle(target.id, {
+          englishContent: shared.englishContent,
+          sharedBy: target.sharedBy || shared.sharedBy,
+          sharedAt: target.sharedAt || shared.sharedAt,
+        })
+        await loadArticleIntoEditor(target)
+        showToastMessage(`English translation received from ${shared.sharedBy}.`)
+        return true
+      }
+
+      // ---- Full article or Chinese half ----
+      const isChineseOnly = shared.part === 'cn'
+      const { added } = importBundle({
+        articles: [{ ...shared, id: undefined }],
+        sharedBy: shared.sharedBy,
+      })
+
+      const key = shared.chineseContent.trim()
+      const target = articles.value.find(
+        (article) => (article.chineseContent || '').trim() === key
+      )
+
+      // The English code may have arrived before the Chinese one.
+      let mergedTranslation = false
+      if (target && !String(target.englishContent || '').trim() && hash) {
+        const pending = readPendingEnglish()
+        const entry = pending[hash]
+        if (entry?.en) {
+          updateArticle(target.id, {
+            englishContent: entry.en,
+            sharedBy: target.sharedBy || entry.by || shared.sharedBy,
+          })
+          delete pending[hash]
+          writePendingEnglish(pending)
+          mergedTranslation = true
+        }
+      }
+
+      if (target) await loadArticleIntoEditor(target)
+      activeView.value = 'home'
+
+      if (isChineseOnly) {
+        showToastMessage(
+          mergedTranslation
+            ? `Chinese and English received from ${shared.sharedBy}.`
+            : `Chinese text received from ${shared.sharedBy}. Now scan the English QR.`
+        )
+      } else {
+        showToastMessage(
+          added
+            ? `Shared by ${shared.sharedBy}: article opened.`
+            : `${shared.sharedBy} shared an article you already have.`
+        )
+      }
+      return true
+    }
+
+    const handleIncomingShare = async () => {
+      const shared = parseShareHash(window.location.hash)
+      if (!shared) return false
+
+      // Drop the payload from the address bar so a refresh never re-imports it.
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${window.location.search}`
+      )
+
+      return await applyIncomingShare(shared)
+    }
+
+    const openScanner = () => {
+      isScannerModalOpen.value = true
+    }
+
+    const closeScanner = () => {
+      isScannerModalOpen.value = false
+    }
+
+    const handleScanDetected = async (value) => {
+      isScannerModalOpen.value = false
+      const parsed = parseScannedValue(value)
+
+      if (parsed.kind === 'share') {
+        await applyIncomingShare(parsed.share)
+        return
+      }
+
+      if (parsed.kind === 'bundle') {
+        const { added, merged } = importBundle(parsed.bundle)
+        if (added || merged) {
+          activeView.value = 'history'
+          showToastMessage(
+            `Imported ${added} new article${added === 1 ? '' : 's'}` +
+              (merged ? `, merged ${merged}.` : '.')
+          )
+        } else {
+          showToastMessage('Nothing new to import.', 'info')
+        }
+        return
+      }
+
+      showToastMessage(
+        parsed.error || 'That code is not a Little Hanzi article.',
+        'error'
+      )
     }
 
     const scrollToBookmark = (paragraphIndex) => {
@@ -833,6 +1309,8 @@ export default {
       showChinese: showChinese.value,
       displayOrder: displayOrder.value,
       interleaveLines: interleaveLines.value,
+      pinyinFontSize: Number(pinyinFontSize.value),
+      englishFontSize: Number(englishFontSize.value),
       displayName: displayName.value
     }))
 
@@ -952,7 +1430,7 @@ export default {
           englishLines = splitTextIntoLines(
             englishPara,
             containerWidth.value,
-            fontSize.value * 0.8,
+            englishFontSize.value,
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             false
           )
@@ -1036,6 +1514,14 @@ export default {
       showChinese.value = newSettings.showChinese
       displayOrder.value = newSettings.displayOrder
       interleaveLines.value = newSettings.interleaveLines
+      pinyinFontSize.value = Math.min(
+        Number(newSettings.pinyinFontSize) || pinyinFontSize.value,
+        Number(newSettings.fontSize) || fontSize.value
+      )
+      englishFontSize.value = Math.min(
+        Number(newSettings.englishFontSize) || englishFontSize.value,
+        Number(newSettings.fontSize) || fontSize.value
+      )
       displayName.value = (newSettings.displayName || '').slice(0, 40)
       // Keep the modal open for live preview; the Close button dismisses it.
       // Recalculate lines when settings change
@@ -1359,7 +1845,7 @@ export default {
     };
 
     // Watch for window resize to recalculate lines
-    watch([interleaveLines, inputText, englishText, fontSize, showPinyin], () => {
+    watch([interleaveLines, inputText, englishText, fontSize, pinyinFontSize, englishFontSize, showPinyin], () => {
       if (interleaveLines.value) {
         nextTick(() => updateContainerWidth())
       }
@@ -1385,20 +1871,28 @@ export default {
     })
 
     // ---------- Lifecycle ----------
-    onMounted(() => {
-      resumeArticle.value = getResumeArticle()
+    onMounted(async () => {
+      const openedShare = await handleIncomingShare()
+      if (!openedShare) resumeArticle.value = getResumeArticle()
+
+      // Restore a previously connected database file in the background.
+      initBackup()
+
       document.addEventListener('click', handleDocumentClick)
       document.addEventListener('keydown', handleKeydown)
+      window.addEventListener('hashchange', handleIncomingShare)
     })
 
     onBeforeUnmount(() => {
       document.removeEventListener('click', handleDocumentClick)
       document.removeEventListener('keydown', handleKeydown)
+      window.removeEventListener('hashchange', handleIncomingShare)
       if (toastTimeout) clearTimeout(toastTimeout)
     })
 
     return {
       articles,
+      activeView,
       isHistoryModalOpen,
       openHistoryModal,
       closeHistoryModal,
@@ -1409,6 +1903,41 @@ export default {
       isCurrentArticle,
       formatDate,
       getLikeCount,
+
+      // Profile
+      profile,
+      updateProfile,
+      handleResetProfile,
+
+      // Sharing
+      isShareModalOpen,
+      shareTarget,
+      openShareModal,
+      shareCurrentArticle,
+      closeShareModal,
+      handleSaveDisplayName,
+
+      // Backup / database
+      isBackupModalOpen,
+      openBackupModal,
+      closeBackupModal,
+      handleChooseBackup,
+      handleReconnectBackup,
+      handleDisableBackup,
+      handleDownloadBackup,
+      handleImportBackup,
+      handleExportShareLibrary,
+      handleFileDrop,
+      backupSupported,
+      backupFileName,
+      backupStatus,
+      backupLastSaved,
+
+      // QR scanning
+      isScannerModalOpen,
+      openScanner,
+      closeScanner,
+      handleScanDetected,
 
       // Data
       inputText,
@@ -1423,6 +1952,8 @@ export default {
       showChinese,
       displayOrder,
       interleaveLines,
+      pinyinFontSize,
+      englishFontSize,
       isSaving,
 
       isLoading, // Add to return
@@ -1473,7 +2004,6 @@ export default {
       // Modal related
       EditIcon,
       Settings,
-      BookOpen,
       Save,
       Info,
       Bookmark,
@@ -1728,7 +2258,18 @@ export default {
 .converter-wrapper {
   width: 100%;
   min-height: 100vh;
+  padding-bottom: 92px;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.home-view,
+.history-view,
+.profile-view {
+  width: 100%;
+}
+
+.history-view {
+  padding-top: 8px;
 }
 
 .comparison-section {
@@ -1918,7 +2459,9 @@ export default {
   align-items: center;
 }
 
-.history-icon-btn {
+.history-icon-btn,
+.share-icon-btn,
+.scan-icon-btn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1931,13 +2474,16 @@ export default {
   color: #495057;
 }
 
-.history-icon-btn:hover {
+.history-icon-btn:hover,
+.share-icon-btn:hover,
+.scan-icon-btn:hover {
   background: #f8f9fa;
   transform: scale(1.05);
 }
 
 .save-icon-btn,
 .info-icon-btn {
+  position: relative;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1957,8 +2503,25 @@ export default {
 }
 
 .save-icon-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+.save-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid rgba(74, 108, 247, 0.2);
+  border-top-color: #4a6cf7;
+  border-radius: 50%;
+  animation: saveSpin 0.7s linear infinite;
+}
+
+@keyframes saveSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* Toast notification */

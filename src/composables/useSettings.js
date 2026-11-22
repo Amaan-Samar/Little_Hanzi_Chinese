@@ -2,6 +2,16 @@ import { ref, watch } from 'vue'
 
 const STORAGE_KEY = 'littleHanzi_settings'
 
+const CHINESE_FONTS = [
+  'NotoSansSC',
+  'NotoSerifSC',
+  'Inter',
+  'Roboto',
+  'Poppins',
+  'ZCOOLKuaiLe',
+  'MaShanZheng',
+]
+
 export function useSettings() {
   // Load saved settings or use defaults
   const loadSettings = () => {
@@ -9,16 +19,34 @@ export function useSettings() {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
+        const fontSize = parsed.fontSize ?? 18
+        // Older builds scaled pinyin and English from the main size. Keep
+        // those proportions when the dedicated size controls are first added.
+        const fallbackSubSize = Math.max(4, Math.round(fontSize * 0.8))
+
         // Ensure all properties exist (for backwards compatibility)
         return {
-          fontSize: parsed.fontSize ?? 15,
-          selectedFont: parsed.selectedFont ?? 'NotoSansSC',
+          fontSize,
+          selectedFont: CHINESE_FONTS.includes(parsed.selectedFont)
+            ? parsed.selectedFont
+            : 'NotoSansSC',
           showPinyin: parsed.showPinyin ?? true,
           showEnglish: parsed.showEnglish ?? true,
           showChinese: parsed.showChinese ?? true,
           displayOrder: parsed.displayOrder ?? 'en-cn',
           interleaveLines: parsed.interleaveLines ?? true,
-          displayName: typeof parsed.displayName === 'string' ? parsed.displayName.slice(0, 40) : ''
+          pinyinFontSize: Math.min(
+            parsed.pinyinFontSize ?? parsed.romanizationFontSize ?? fallbackSubSize,
+            fontSize,
+          ),
+          englishFontSize: Math.min(
+            parsed.englishFontSize ?? fallbackSubSize,
+            fontSize,
+          ),
+          displayName:
+            typeof parsed.displayName === 'string'
+              ? parsed.displayName.slice(0, 40)
+              : '',
         }
       }
     } catch (error) {
@@ -37,27 +65,49 @@ export function useSettings() {
 
   // Default settings
   const defaultSettings = {
-    fontSize: 15,
+    fontSize: 18,
     selectedFont: 'NotoSansSC',
     showPinyin: true,
     showEnglish: true,
     showChinese: true,
     displayOrder: 'en-cn',
     interleaveLines: true,
-    displayName: ''
+    pinyinFontSize: 12,
+    englishFontSize: 14,
+    displayName: '',
   }
 
   const savedSettings = loadSettings()
-  
+
   // Create reactive settings with saved values or defaults
   const fontSize = ref(savedSettings?.fontSize ?? defaultSettings.fontSize)
-  const selectedFont = ref(savedSettings?.selectedFont ?? defaultSettings.selectedFont)
-  const showPinyin = ref(savedSettings?.showPinyin ?? defaultSettings.showPinyin)
-  const showEnglish = ref(savedSettings?.showEnglish ?? defaultSettings.showEnglish)
-  const showChinese = ref(savedSettings?.showChinese ?? defaultSettings.showChinese)
-  const displayOrder = ref(savedSettings?.displayOrder ?? defaultSettings.displayOrder)
-  const interleaveLines = ref(savedSettings?.interleaveLines ?? defaultSettings.interleaveLines)
-  const displayName = ref(savedSettings?.displayName ?? defaultSettings.displayName)
+  const selectedFont = ref(
+    savedSettings?.selectedFont ?? defaultSettings.selectedFont,
+  )
+  const showPinyin = ref(
+    savedSettings?.showPinyin ?? defaultSettings.showPinyin,
+  )
+  const showEnglish = ref(
+    savedSettings?.showEnglish ?? defaultSettings.showEnglish,
+  )
+  const showChinese = ref(
+    savedSettings?.showChinese ?? defaultSettings.showChinese,
+  )
+  const displayOrder = ref(
+    savedSettings?.displayOrder ?? defaultSettings.displayOrder,
+  )
+  const interleaveLines = ref(
+    savedSettings?.interleaveLines ?? defaultSettings.interleaveLines,
+  )
+  const pinyinFontSize = ref(
+    savedSettings?.pinyinFontSize ?? defaultSettings.pinyinFontSize,
+  )
+  const englishFontSize = ref(
+    savedSettings?.englishFontSize ?? defaultSettings.englishFontSize,
+  )
+  const displayName = ref(
+    savedSettings?.displayName ?? defaultSettings.displayName,
+  )
 
   // Save settings whenever any setting changes
   const saveCurrentSettings = () => {
@@ -69,14 +119,41 @@ export function useSettings() {
       showChinese: showChinese.value,
       displayOrder: displayOrder.value,
       interleaveLines: interleaveLines.value,
-      displayName: displayName.value
+      pinyinFontSize: pinyinFontSize.value,
+      englishFontSize: englishFontSize.value,
+      displayName: displayName.value,
     })
   }
 
+  // The secondary text must never grow larger than the Chinese characters.
+  watch(
+    fontSize,
+    (size) => {
+      if (pinyinFontSize.value > size) pinyinFontSize.value = size
+      if (englishFontSize.value > size) englishFontSize.value = size
+    },
+    { immediate: true },
+  )
+
   // Watch all settings and save on change
-  watch([fontSize, selectedFont, showPinyin, showEnglish, showChinese, displayOrder, interleaveLines, displayName], () => {
-    saveCurrentSettings()
-  }, { deep: true })
+  watch(
+    [
+      fontSize,
+      selectedFont,
+      showPinyin,
+      showEnglish,
+      showChinese,
+      displayOrder,
+      interleaveLines,
+      pinyinFontSize,
+      englishFontSize,
+      displayName,
+    ],
+    () => {
+      saveCurrentSettings()
+    },
+    { deep: true },
+  )
 
   // Reset to defaults
   const resetSettings = () => {
@@ -87,6 +164,8 @@ export function useSettings() {
     showChinese.value = defaultSettings.showChinese
     displayOrder.value = defaultSettings.displayOrder
     interleaveLines.value = defaultSettings.interleaveLines
+    pinyinFontSize.value = defaultSettings.pinyinFontSize
+    englishFontSize.value = defaultSettings.englishFontSize
     displayName.value = defaultSettings.displayName
   }
 
@@ -98,8 +177,10 @@ export function useSettings() {
     showChinese,
     displayOrder,
     interleaveLines,
+    pinyinFontSize,
+    englishFontSize,
     displayName,
     resetSettings,
-    saveCurrentSettings
+    saveCurrentSettings,
   }
 }

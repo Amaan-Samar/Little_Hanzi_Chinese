@@ -1,18 +1,23 @@
 <template>
-  <Teleport to="body">
-    <div v-if="isOpen" class="history-modal-overlay" @click="handleOverlayClick">
-      <div class="history-modal" :class="{ mobile: isMobile }" @click.stop>
-        <button class="close-btn" @click="close" title="Close">
+  <Teleport to="body" :disabled="embedded">
+    <div
+      v-if="embedded || isOpen"
+      class="history-modal-overlay"
+      :class="{ embedded }"
+      @click="handleOverlayClick"
+    >
+      <div class="history-modal" :class="{ mobile: isMobile, embedded }" @click.stop>
+        <button v-if="!embedded" class="close-btn" @click="close" title="Close">
           <X :size="18" />
         </button>
 
-        <!-- Tabs -->
-        <div class="history-tabs">
+        <!-- Tabs: only categories that actually contain articles. -->
+        <div v-if="tabs.length" class="history-tabs">
           <button
             v-for="tab in tabs"
             :key="tab.id"
             class="history-tab"
-            :class="{ 'is-active': activeTab === tab.id }"
+            :class="{ 'is-active': effectiveTab === tab.id }"
             @click="activeTab = tab.id"
           >
             <component :is="tab.icon" :size="14" />
@@ -88,6 +93,10 @@
                       <Heart :size="10" fill="currentColor" />
                       {{ getLikeCount(article) }}
                     </span>
+                    <span v-if="article.sharedBy" class="badge badge-shared">
+                      <Share2 :size="10" />
+                      Shared by {{ article.sharedBy }}
+                    </span>
                     <span v-if="article.archived" class="badge badge-muted">
                       <Archive :size="10" />
                       Archived
@@ -106,6 +115,13 @@
                 </div>
 
                 <div class="article-actions">
+                  <button
+                    @click.stop="$emit('share-article', article)"
+                    class="card-action"
+                    title="Share article"
+                  >
+                    <Share2 :size="15" />
+                  </button>
                   <button
                     @click.stop="$emit('toggle-archive', article.id)"
                     class="card-action"
@@ -128,7 +144,19 @@
         </div>
 
         <div class="history-modal-footer">
-          <button class="close-btn-bottom" @click="close">Close</button>
+          <div class="footer-links">
+            <button class="backup-link" @click="$emit('import-file')">
+              <FileUp :size="14" />
+              Open shared file
+            </button>
+            <button class="backup-link" @click="$emit('open-backup')">
+              <Database :size="14" />
+              Database
+            </button>
+          </div>
+          <button v-if="!embedded" class="close-btn-bottom" @click="close">
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -156,14 +184,21 @@ import {
   Library,
   Trash2,
   Heart,
+  Share2,
   Archive,
   ArchiveRestore,
-  CircleDot
+  CircleDot,
+  Database,
+  FileUp
 } from 'lucide-vue-next'
 import ConfirmModal from './ConfirmModal.vue'
 
 const props = defineProps({
   isOpen: {
+    type: Boolean,
+    default: false
+  },
+  embedded: {
     type: Boolean,
     default: false
   },
@@ -190,7 +225,10 @@ const emit = defineEmits([
   'load-article',
   'delete-article',
   'delete-all',
-  'toggle-archive'
+  'share-article',
+  'toggle-archive',
+  'open-backup',
+  'import-file'
 ])
 
 const activeTab = ref('reading') // reading | unread | liked | all | archived
@@ -224,6 +262,15 @@ const likedArticles = computed(() =>
     )
 )
 
+const sharedArticles = computed(() =>
+  props.articles
+    .filter((article) => article.sharedBy && !article.archived)
+    .sort(
+      (a, b) =>
+        (b.sharedAt || b.timestamp) - (a.sharedAt || a.timestamp)
+    )
+)
+
 const allArticles = computed(() =>
   [...props.articles]
     .filter((article) => !article.archived)
@@ -241,7 +288,7 @@ const readCount = computed(
 )
 const unreadCount = computed(() => unreadArticles.value.length)
 
-const tabs = computed(() => [
+const allTabs = computed(() => [
   {
     id: 'reading',
     label: 'Reading',
@@ -261,6 +308,12 @@ const tabs = computed(() => [
     count: likedArticles.value.length
   },
   {
+    id: 'shared',
+    label: 'Shared',
+    icon: Share2,
+    count: sharedArticles.value.length
+  },
+  {
     id: 'all',
     label: 'All',
     icon: Library,
@@ -274,8 +327,21 @@ const tabs = computed(() => [
   }
 ])
 
+// A tab with zero articles is noise, so only render the categories that
+// actually have something inside them.
+const tabs = computed(() => allTabs.value.filter((tab) => tab.count > 0))
+
+// Keep a valid selection when the tab the reader was on disappears after a
+// delete, archive, or import.
+const effectiveTab = computed(() => {
+  if (tabs.value.some((tab) => tab.id === activeTab.value)) {
+    return activeTab.value
+  }
+  return tabs.value[0]?.id || 'all'
+})
+
 const activeTabConfig = computed(() => {
-  switch (activeTab.value) {
+  switch (effectiveTab.value) {
     case 'reading':
       return {
         emptyIcon: BookMarked,
@@ -294,6 +360,12 @@ const activeTabConfig = computed(() => {
         emptyTitle: 'No liked paragraphs yet',
         emptyDetail: 'Tap the heart on any paragraph you enjoy; articles are ranked by likes.'
       }
+    case 'shared':
+      return {
+        emptyIcon: Share2,
+        emptyTitle: 'No shared articles',
+        emptyDetail: 'Articles a friend sends you appear here with their name.'
+      }
     case 'archived':
       return {
         emptyIcon: Archive,
@@ -310,13 +382,15 @@ const activeTabConfig = computed(() => {
 })
 
 const visibleArticles = computed(() => {
-  switch (activeTab.value) {
+  switch (effectiveTab.value) {
     case 'reading':
       return unfinishedArticles.value
     case 'unread':
       return unreadArticles.value
     case 'liked':
       return likedArticles.value
+    case 'shared':
+      return sharedArticles.value
     case 'archived':
       return archivedArticles.value
     default:
@@ -397,11 +471,23 @@ const handleEscape = (e) => {
   }
 }
 
-// Unfinished reads are the default tab every time the history opens.
+// Choose a tab that exists whenever the visible category set changes.
+watch(
+  tabs,
+  (list) => {
+    if (list.length && !list.some((tab) => tab.id === activeTab.value)) {
+      activeTab.value = list[0].id
+    }
+  },
+  { immediate: true }
+)
+
+// Unfinished reads are the default tab every time the history opens, falling
+// back to whichever category actually has articles.
 watch(
   () => props.isOpen,
   (open) => {
-    if (open) activeTab.value = 'reading'
+    if (open) activeTab.value = tabs.value[0]?.id || 'all'
   }
 )
 
@@ -779,6 +865,12 @@ onBeforeUnmount(() => {
   border-color: #e9ecef;
 }
 
+.badge-shared {
+  color: #7c3aed;
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
 .read-more {
   font-size: 10px;
   font-weight: 600;
@@ -824,8 +916,62 @@ onBeforeUnmount(() => {
   padding: 12px 18px 16px;
   border-top: 1px solid #f1f3f5;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   flex-shrink: 0;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.backup-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.backup-link:hover {
+  background: #f8f9fa;
+  color: #4a6cf7;
+}
+
+/* History tab presentation: no overlay, fills the page instead. */
+.history-modal-overlay.embedded {
+  position: static;
+  display: block;
+  min-height: 100%;
+  padding: 12px 12px 120px;
+  background: transparent;
+  backdrop-filter: none;
+  animation: none;
+}
+
+.history-modal.embedded {
+  width: 100%;
+  max-width: 920px;
+  max-height: none;
+  margin: 0 auto;
+  border-radius: 18px;
+  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.08);
+}
+
+.history-modal.embedded .history-modal-body {
+  overflow: visible;
+  max-height: none;
 }
 
 .close-btn-bottom {

@@ -184,11 +184,34 @@ export const makeShareBundle = (articles, sharedBy) => ({
   })),
 })
 
-export const makeBackupBundle = (articles) => ({
+const cleanProfile = (profile) => {
+  if (!profile || typeof profile !== 'object') return null
+  const field = (key, max) =>
+    typeof profile[key] === 'string' ? profile[key].slice(0, max) : ''
+  return {
+    name: field('name', 40),
+    email: field('email', 120),
+    phone: field('phone', 40),
+    occupation: field('occupation', 80),
+    country: field('country', 60),
+    city: field('city', 60),
+    address: field('address', 240),
+    bio: field('bio', 600),
+    photo:
+      typeof profile.photo === 'string' &&
+      profile.photo.startsWith('data:image/') &&
+      profile.photo.length <= 400000
+        ? profile.photo
+        : '',
+  }
+}
+
+export const makeBackupBundle = (articles, profile = null) => ({
   app: SHARE_APP_ID,
   version: SHARE_VERSION,
   kind: 'backup',
   exportedAt: Date.now(),
+  ...(cleanProfile(profile) ? { profile: cleanProfile(profile) } : {}),
   articles: (articles || []).map((article) => ({
     id: article.id,
     title: article.title,
@@ -232,6 +255,7 @@ export const parseBundle = (text) => {
       kind: parsed.kind === 'share' ? 'share' : 'backup',
       sharedBy: cleanString(parsed.sharedBy) || 'A friend',
       exportedAt: Number(parsed.exportedAt) || Date.now(),
+      profile: cleanProfile(parsed.profile),
       articles: parsed.articles,
     },
   }

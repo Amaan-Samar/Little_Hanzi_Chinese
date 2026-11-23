@@ -19,28 +19,35 @@ export function useSettings() {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        const fontSize = parsed.fontSize ?? 18
+        const fontSize = Number(parsed.fontSize) || 18
         // Older builds scaled pinyin and English from the main size. Keep
         // those proportions when the dedicated size controls are first added.
         const fallbackSubSize = Math.max(4, Math.round(fontSize * 0.8))
 
-        // Ensure all properties exist (for backwards compatibility)
+        // Ensure all properties exist (for backwards compatibility).
+        // `interleaveLines` must stay a real boolean: `false ?? true` is
+        // false, but a malformed string would silently change the layout.
         return {
           fontSize,
           selectedFont: CHINESE_FONTS.includes(parsed.selectedFont)
             ? parsed.selectedFont
             : 'NotoSansSC',
-          showPinyin: parsed.showPinyin ?? true,
-          showEnglish: parsed.showEnglish ?? true,
-          showChinese: parsed.showChinese ?? true,
-          displayOrder: parsed.displayOrder ?? 'en-cn',
-          interleaveLines: parsed.interleaveLines ?? true,
+          showPinyin: parsed.showPinyin !== false,
+          showEnglish: parsed.showEnglish !== false,
+          showChinese: parsed.showChinese !== false,
+          displayOrder:
+            parsed.displayOrder === 'cn-en' ? 'cn-en' : 'en-cn',
+          interleaveLines:
+            typeof parsed.interleaveLines === 'boolean'
+              ? parsed.interleaveLines
+              : true,
           pinyinFontSize: Math.min(
-            parsed.pinyinFontSize ?? parsed.romanizationFontSize ?? fallbackSubSize,
+            Number(parsed.pinyinFontSize ?? parsed.romanizationFontSize) ||
+              fallbackSubSize,
             fontSize,
           ),
           englishFontSize: Math.min(
-            parsed.englishFontSize ?? fallbackSubSize,
+            Number(parsed.englishFontSize) || fallbackSubSize,
             fontSize,
           ),
           displayName:
@@ -152,10 +159,12 @@ export function useSettings() {
     () => {
       saveCurrentSettings()
     },
-    { deep: true },
+    // Persist synchronously so a quick tab close cannot race the write.
+    { deep: true, flush: 'sync' },
   )
 
-  // Reset to defaults
+  // Reset to defaults. The profile name is owned by the profile page, so it
+  // is intentionally left alone here.
   const resetSettings = () => {
     fontSize.value = defaultSettings.fontSize
     selectedFont.value = defaultSettings.selectedFont
@@ -166,7 +175,6 @@ export function useSettings() {
     interleaveLines.value = defaultSettings.interleaveLines
     pinyinFontSize.value = defaultSettings.pinyinFontSize
     englishFontSize.value = defaultSettings.englishFontSize
-    displayName.value = defaultSettings.displayName
   }
 
   return {

@@ -9,9 +9,14 @@
         <div class="share-modal-body">
           <h3 class="share-title">Share article</h3>
           <p class="share-subtitle">
-            Let a friend scan the QR code, open the share link, or receive the
-            article through any app on your device.
+            Chinese and English travel together in one compressed article. Scan
+            the QR code, open the link, or send the JSON file through any app.
           </p>
+
+          <div class="language-row">
+            <span class="language-pill">中文 Chinese</span>
+            <span class="language-pill">English</span>
+          </div>
 
           <div class="field">
             <label class="field-label">Your name</label>
@@ -24,12 +29,12 @@
             />
           </div>
 
-          <!-- Single QR: everything fits -->
-          <div v-if="!splitMode" class="qr-card">
+          <!-- One QR carries both languages. -->
+          <div v-if="!qrTooLarge" class="qr-card">
             <img
               v-if="qrFull"
               :src="qrFull"
-              alt="QR code containing the shared article"
+              alt="QR code containing the shared article in Chinese and English"
               class="qr-image"
             />
             <div v-else class="qr-placeholder">
@@ -40,66 +45,17 @@
             <p class="qr-caption">{{ articleTitle }}</p>
           </div>
 
-          <!-- Too large for one QR -->
-          <template v-else>
-            <div class="notice notice-info">
-              <ScanLine :size="18" />
-              <p v-if="hasEnglish && cnCanQr && enCanQr">
-                This article is too large for one QR code. Share it in two
-                steps: scan the Chinese code first, then the English code.
-              </p>
-              <p v-else-if="cnCanQr">
-                The full article is too large for one QR code. Scan the Chinese
-                code below, or download the article file.
-              </p>
-              <p v-else>
-                This article is too large for a QR code. Download the article
-                file below and send it to your friend.
-              </p>
-            </div>
-
-            <div v-if="cnCanQr" class="qr-block">
-              <div class="qr-head">
-                <span class="step-badge">1</span>
-                <span>Chinese</span>
-              </div>
-              <img
-                v-if="qrCn"
-                :src="qrCn"
-                alt="QR code containing the Chinese text"
-                class="qr-image"
-              />
-              <div v-else class="qr-placeholder small">
-                <Loader2 :size="20" class="spinner" />
-                <p>Generating QR…</p>
-              </div>
-            </div>
-
-            <div v-if="hasEnglish && enCanQr" class="qr-block">
-              <div class="qr-head">
-                <span class="step-badge">{{ cnCanQr ? 2 : 1 }}</span>
-                <span>English translation</span>
-              </div>
-              <img
-                v-if="qrEn"
-                :src="qrEn"
-                alt="QR code containing the English translation"
-                class="qr-image"
-              />
-              <div v-else class="qr-placeholder small">
-                <Loader2 :size="20" class="spinner" />
-                <p>Generating QR…</p>
-              </div>
-            </div>
-
-            <p v-if="cnCanQr && hasEnglish && enCanQr" class="qr-hint">
-              Keep the article until both codes have been scanned. The English
-              code finds the article by its Chinese text.
+          <div v-else class="notice notice-info">
+            <AlertTriangle :size="18" />
+            <p>
+              This article is too large for one QR code. Send the JSON file
+              below instead — your friend can open it from History → Open shared
+              file.
             </p>
-          </template>
+          </div>
 
-          <!-- Share link -->
-          <div v-if="!splitMode && fullShare.url" class="field">
+          <!-- Share link (only when it is a sensible size). -->
+          <div v-if="fullShare.url && !qrTooLarge" class="field">
             <label class="field-label">Share link</label>
             <div class="link-row">
               <input
@@ -108,30 +64,27 @@
                 class="link-input"
                 @focus="$event.target.select()"
               />
-              <button class="copy-btn" @click="copyLink(fullShare.url, 'full')">
-                <Check v-if="copiedKey === 'full'" :size="14" />
+              <button class="copy-btn" @click="copyLink(fullShare.url)">
+                <Check v-if="copied" :size="14" />
                 <Copy v-else :size="14" />
-                {{ copiedKey === 'full' ? 'Copied' : 'Copy' }}
+                {{ copied ? 'Copied' : 'Copy' }}
               </button>
             </div>
           </div>
 
-          <!-- Native share -->
           <button
             v-if="canNativeShare"
             class="native-share-btn"
             @click="shareNatively"
           >
             <Share2 :size="16" />
-            Share to another app
+            {{ canShareFiles ? 'Share JSON file' : 'Share to another app' }}
           </button>
 
-          <!-- Downloads always available, and the primary fallback when a QR
-               cannot hold the article. -->
           <div class="download-grid">
             <button
               class="secondary-btn"
-              :disabled="!primaryQr"
+              :disabled="!qrFull"
               @click="downloadQr"
             >
               <Download :size="15" />
@@ -139,13 +92,14 @@
             </button>
             <button class="secondary-btn" @click="downloadFile">
               <FileDown :size="15" />
-              Article file
+              Article JSON
             </button>
           </div>
 
           <p class="share-footnote">
-            Received a .json file instead? Open History → Open shared file, or
-            scan it from the home screen.
+            The JSON file contains both the Chinese text and its English
+            translation. Open it from History → Open shared file, or drop it
+            anywhere on the app.
           </p>
         </div>
       </div>
@@ -163,7 +117,6 @@ import {
   FileDown,
   AlertTriangle,
   Loader2,
-  ScanLine,
   Share2,
 } from 'lucide-vue-next'
 import QRCode from 'qrcode'
@@ -186,41 +139,30 @@ const emit = defineEmits(['close', 'save-name', 'notify'])
 
 const name = ref('')
 const qrFull = ref('')
-const qrCn = ref('')
-const qrEn = ref('')
 const qrLoading = ref(false)
-const copiedKey = ref('')
+const copied = ref(false)
 let copiedTimeout = null
 let qrToken = 0
 
 const articleTitle = computed(() => props.article?.title || 'Untitled article')
-const hasEnglish = computed(() =>
-  Boolean((props.article?.englishContent || '').trim()),
-)
-
 const shareBy = computed(() => name.value.trim() || 'A friend')
 
 const fullShare = computed(() =>
   buildShareUrl(buildSharePayload(props.article, shareBy.value, 'full')),
 )
-const cnShare = computed(() =>
-  buildShareUrl(buildSharePayload(props.article, shareBy.value, 'cn')),
-)
-const enShare = computed(() =>
-  hasEnglish.value
-    ? buildShareUrl(buildSharePayload(props.article, shareBy.value, 'en'))
-    : { url: '', encoded: '', tooLarge: false },
+const qrTooLarge = computed(
+  () => fullShare.value.tooLarge || !fullShare.value.url,
 )
 
-// If the combined article will not fit in a QR, switch to two codes.
-const splitMode = computed(() => fullShare.value.tooLarge)
-const cnCanQr = computed(
-  () => Boolean(cnShare.value.url) && !cnShare.value.tooLarge,
+const shareBundle = computed(() =>
+  props.article ? makeShareBundle([props.article], shareBy.value) : null,
 )
-const enCanQr = computed(
-  () => hasEnglish.value && Boolean(enShare.value.url) && !enShare.value.tooLarge,
+const shareFileName = computed(
+  () => `${slugify(articleTitle.value, 'article')}-little-hanzi.json`,
 )
-const primaryQr = computed(() => (splitMode.value ? qrCn.value : qrFull.value))
+const shareJson = computed(() =>
+  shareBundle.value ? JSON.stringify(shareBundle.value, null, 2) : '',
+)
 
 const canNativeShare = computed(
   () =>
@@ -228,6 +170,27 @@ const canNativeShare = computed(
     typeof navigator.share === 'function' &&
     Boolean((props.article?.chineseContent || '').trim()),
 )
+
+const makeShareFile = () =>
+  new File([shareJson.value], shareFileName.value, {
+    type: 'application/json',
+  })
+
+const canShareFiles = computed(() => {
+  if (
+    typeof navigator === 'undefined' ||
+    typeof navigator.share !== 'function' ||
+    typeof navigator.canShare !== 'function' ||
+    typeof File === 'undefined'
+  ) {
+    return false
+  }
+  try {
+    return navigator.canShare({ files: [makeShareFile()] })
+  } catch {
+    return false
+  }
+})
 
 const emitName = () => {
   emit('save-name', name.value.slice(0, 40))
@@ -245,33 +208,16 @@ const renderQr = (url) =>
     color: { dark: '#1e3a8a', light: '#ffffff' },
   })
 
-const generateQrs = async () => {
+const generateQr = async () => {
   const token = ++qrToken
   qrFull.value = ''
-  qrCn.value = ''
-  qrEn.value = ''
 
-  if (!props.isOpen || !props.article) return
+  if (!props.isOpen || !props.article || qrTooLarge.value) return
 
   qrLoading.value = true
   try {
-    if (!splitMode.value) {
-      const data = await renderQr(fullShare.value.url)
-      if (token === qrToken) qrFull.value = data
-      return
-    }
-
-    if (cnCanQr.value) {
-      const data = await renderQr(cnShare.value.url)
-      if (token !== qrToken) return
-      qrCn.value = data
-    }
-
-    if (enCanQr.value) {
-      const data = await renderQr(enShare.value.url)
-      if (token !== qrToken) return
-      qrEn.value = data
-    }
+    const data = await renderQr(fullShare.value.url)
+    if (token === qrToken) qrFull.value = data
   } catch (error) {
     console.error('QR generation failed:', error)
     if (token === qrToken) notify('Could not generate a QR code.', 'error')
@@ -285,66 +231,74 @@ watch(
   (open) => {
     if (open) {
       name.value = props.displayName || ''
-      copiedKey.value = ''
-      generateQrs()
+      copied.value = false
+      generateQr()
     }
   },
 )
 
 watch([name, () => props.article], () => {
-  if (props.isOpen) generateQrs()
+  if (props.isOpen) generateQr()
 })
 
-const copyLink = async (url, key) => {
+const copyLink = async (url) => {
   if (!url) return
   if (!(await copyText(url))) {
     notify('Could not copy the link.', 'error')
     return
   }
 
-  copiedKey.value = key
+  copied.value = true
   if (copiedTimeout) clearTimeout(copiedTimeout)
   copiedTimeout = setTimeout(() => {
-    copiedKey.value = ''
+    copied.value = false
   }, 1800)
 }
 
 const downloadQr = () => {
-  if (!primaryQr.value) return
-  const suffix = splitMode.value ? '-chinese-qr' : '-qr'
+  if (!qrFull.value) return
   const link = document.createElement('a')
-  link.href = primaryQr.value
-  link.download = `${slugify(articleTitle.value, 'article')}${suffix}.png`
+  link.href = qrFull.value
+  link.download = `${slugify(articleTitle.value, 'article')}-qr.png`
   document.body.appendChild(link)
   link.click()
   link.remove()
 }
 
 const downloadFile = () => {
-  if (!props.article) return
-  const bundle = makeShareBundle([props.article], shareBy.value)
-  downloadJson(bundle, `${slugify(articleTitle.value, 'article')}-shared.json`)
+  if (!shareBundle.value) return
+  downloadJson(shareBundle.value, shareFileName.value)
 }
 
 const shareNatively = async () => {
   if (!canNativeShare.value) return
 
   const article = props.article
-  const textParts = [article.chineseContent || '']
-  if ((article.englishContent || '').trim()) {
-    textParts.push(article.englishContent)
-  }
-
-  const data = {
-    title: articleTitle.value,
-    text: textParts.filter(Boolean).join('\n\n'),
-  }
-
-  // Only attach the link when it fits in a QR; huge links are awkward in
-  // messaging apps and the text above already carries the full article.
-  if (!splitMode.value && fullShare.value.url) data.url = fullShare.value.url
 
   try {
+    if (canShareFiles.value) {
+      await navigator.share({
+        files: [makeShareFile()],
+        title: articleTitle.value,
+        text: 'A Little Hanzi article with Chinese and English.',
+      })
+      return
+    }
+
+    const textParts = [article.chineseContent || '']
+    if ((article.englishContent || '').trim()) {
+      textParts.push(article.englishContent)
+    }
+
+    const data = {
+      title: articleTitle.value,
+      text: textParts.filter(Boolean).join('\n\n'),
+    }
+
+    // Long links are awkward in messaging apps, and the text above already
+    // carries the article. Only attach the link when it fits comfortably.
+    if (!qrTooLarge.value && fullShare.value.url) data.url = fullShare.value.url
+
     await navigator.share(data)
   } catch (error) {
     if (error?.name !== 'AbortError') {
@@ -452,6 +406,22 @@ const shareNatively = async () => {
   color: #6b7280;
 }
 
+.language-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.language-pill {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef1ff;
+  border: 1px solid #d8defb;
+  color: #4a6cf7;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
 .field {
   margin-top: 16px;
 }
@@ -514,10 +484,6 @@ const shareNatively = async () => {
   font-size: 12px;
 }
 
-.qr-placeholder.small {
-  min-height: 90px;
-}
-
 .qr-placeholder p {
   margin: 0;
 }
@@ -564,46 +530,6 @@ const shareNatively = async () => {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
-}
-
-.qr-block {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid #e9ecef;
-  border-radius: 12px;
-  background: #f8f9fa;
-}
-
-.qr-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 9px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.step-badge {
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #4a6cf7;
-  color: white;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  letter-spacing: 0;
-}
-
-.qr-hint {
-  margin: 10px 0 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: #6b7280;
 }
 
 .link-row {

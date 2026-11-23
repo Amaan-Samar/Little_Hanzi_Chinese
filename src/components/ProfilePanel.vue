@@ -1,175 +1,355 @@
 <template>
   <section class="profile-panel">
     <header class="profile-hero">
-      <div class="avatar">{{ initials }}</div>
+      <button
+        class="avatar-button"
+        type="button"
+        title="Change profile photo"
+        @click="pickPhoto"
+      >
+        <img
+          v-if="profile.photo"
+          :src="profile.photo"
+          alt="Profile photo"
+          class="avatar-image"
+        />
+        <span v-else class="avatar-initials">{{ initials }}</span>
+        <span class="avatar-badge"><Camera :size="13" /></span>
+      </button>
+
       <div class="hero-copy">
         <h2>{{ profile.name || 'Your profile' }}</h2>
-        <p>
-          Keep your details on this device. They personalise shares and stay
-          private unless you send them.
+        <p class="hero-location">
+          <MapPin :size="13" />
+          <span>{{ locationLine || 'Add your city and country' }}</span>
+        </p>
+        <p class="hero-note">
+          Saved on this device and included in your database backups.
         </p>
       </div>
+
+      <div class="hero-actions">
+        <button class="ghost-btn small" type="button" @click="pickPhoto">
+          <Camera :size="14" />
+          {{ profile.photo ? 'Change photo' : 'Add photo' }}
+        </button>
+        <button
+          v-if="profile.photo"
+          class="ghost-btn small danger"
+          type="button"
+          @click="removePhoto"
+        >
+          Remove
+        </button>
+      </div>
+
+      <input
+        ref="photoInput"
+        type="file"
+        accept="image/*"
+        class="photo-input"
+        @change="handlePhotoFile"
+      />
     </header>
 
-    <div class="panel-card">
-      <div class="card-heading">
-        <div>
-          <h3>Personal information</h3>
-          <p>Saved automatically in this browser.</p>
+    <p v-if="photoError" class="photo-error">{{ photoError }}</p>
+
+    <nav class="profile-tabs" role="tablist" aria-label="Profile sections">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        class="profile-tab"
+        :class="{ active: activeTab === tab.id }"
+        role="tab"
+        :aria-selected="activeTab === tab.id"
+        @click="activeTab = tab.id"
+      >
+        <component :is="tab.icon" :size="15" />
+        <span>{{ tab.label }}</span>
+      </button>
+    </nav>
+
+    <!-- Profile --------------------------------------------------------- -->
+    <div v-if="activeTab === 'profile'" class="tab-panel">
+      <div class="panel-card">
+        <div class="card-heading">
+          <div>
+            <h3>Personal information</h3>
+            <p>How you appear on articles you share.</p>
+          </div>
+          <span class="saved-pill">Auto-saved</span>
         </div>
-        <span class="saved-pill">Saved</span>
-      </div>
 
-      <div class="field-grid">
-        <label class="field">
-          <span class="field-label">Name</span>
-          <input
-            :value="profile.name"
-            maxlength="40"
-            placeholder="e.g. Amaan"
-            class="text-input"
-            @input="updateField('name', $event.target.value)"
-          />
-        </label>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Name</span>
+            <input
+              :value="profile.name"
+              maxlength="40"
+              placeholder="e.g. Amaan"
+              class="text-input"
+              @input="updateField('name', $event.target.value)"
+            />
+          </label>
 
-        <label class="field">
-          <span class="field-label">Email</span>
-          <input
-            :value="profile.email"
-            type="email"
-            maxlength="120"
-            placeholder="you@example.com"
-            class="text-input"
-            @input="updateField('email', $event.target.value)"
-          />
-        </label>
+          <label class="field">
+            <span class="field-label">Email</span>
+            <input
+              :value="profile.email"
+              type="email"
+              maxlength="120"
+              placeholder="you@example.com"
+              class="text-input"
+              @input="updateField('email', $event.target.value)"
+            />
+          </label>
 
-        <label class="field">
-          <span class="field-label">Phone number</span>
-          <input
-            :value="profile.phone"
-            type="tel"
-            maxlength="40"
-            placeholder="+91 00000 00000"
-            class="text-input"
-            @input="updateField('phone', $event.target.value)"
-          />
-        </label>
+          <label class="field">
+            <span class="field-label">Phone number</span>
+            <input
+              :value="profile.phone"
+              type="tel"
+              maxlength="40"
+              placeholder="+91 00000 00000"
+              class="text-input"
+              @input="updateField('phone', $event.target.value)"
+            />
+          </label>
 
-        <label class="field">
-          <span class="field-label">Occupation</span>
-          <input
-            :value="profile.occupation"
-            maxlength="80"
-            placeholder="e.g. Student, Teacher, Engineer"
-            class="text-input"
-            @input="updateField('occupation', $event.target.value)"
-          />
-        </label>
+          <label class="field">
+            <span class="field-label">Occupation</span>
+            <input
+              :value="profile.occupation"
+              maxlength="80"
+              placeholder="e.g. Student, Teacher, Engineer"
+              class="text-input"
+              @input="updateField('occupation', $event.target.value)"
+            />
+          </label>
+        </div>
 
-        <label class="field field-wide">
-          <span class="field-label">Address</span>
-          <textarea
-            :value="profile.address"
-            maxlength="240"
-            rows="3"
-            placeholder="Street, city, country"
-            class="text-input textarea"
-            @input="updateField('address', $event.target.value)"
-          ></textarea>
-        </label>
-      </div>
-
-      <div class="panel-actions">
-        <button class="ghost-btn" @click="$emit('reset-profile')">
-          Clear profile
-        </button>
-        <button class="ghost-btn" @click="$emit('scan-qr')">
-          <ScanLine :size="15" />
-          Scan QR code
-        </button>
+        <div class="panel-actions">
+          <button class="ghost-btn" type="button" @click="$emit('reset-profile')">
+            Clear profile
+          </button>
+          <button class="ghost-btn" type="button" @click="$emit('scan-qr')">
+            <ScanLine :size="15" />
+            Scan QR code
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="panel-card">
-      <div class="card-heading">
-        <div>
-          <h3>Database &amp; export</h3>
-          <p>Connect a file on this device to keep a durable copy of your library.</p>
+    <!-- Location -------------------------------------------------------- -->
+    <div v-else-if="activeTab === 'location'" class="tab-panel">
+      <div class="panel-card">
+        <div class="card-heading">
+          <div>
+            <h3>Location</h3>
+            <p>Share where you are learning from. No map or GPS is used.</p>
+          </div>
+          <span class="saved-pill">Auto-saved</span>
         </div>
-        <span class="db-pill" :class="statusTone">{{ statusLabel }}</span>
-      </div>
 
-      <div class="db-status">
-        <div class="db-icon" :class="statusTone">
-          <ShieldCheck v-if="backupStatus === 'connected'" :size="19" />
-          <AlertTriangle
-            v-else-if="backupStatus === 'needs-permission' || backupStatus === 'error'"
-            :size="19"
-          />
-          <Database v-else :size="19" />
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Country</span>
+            <input
+              :value="profile.country"
+              maxlength="60"
+              placeholder="e.g. India"
+              class="text-input"
+              @input="updateField('country', $event.target.value)"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">City</span>
+            <input
+              :value="profile.city"
+              maxlength="60"
+              placeholder="e.g. Mumbai"
+              class="text-input"
+              @input="updateField('city', $event.target.value)"
+            />
+          </label>
+
+          <label class="field field-wide">
+            <span class="field-label">Address or neighbourhood</span>
+            <textarea
+              :value="profile.address"
+              maxlength="240"
+              rows="3"
+              placeholder="Street, area, or anything you want to remember"
+              class="text-input textarea"
+              @input="updateField('address', $event.target.value)"
+            ></textarea>
+          </label>
         </div>
-        <div class="db-copy">
-          <strong>{{ statusTitle }}</strong>
-          <span>{{ statusDetail }}</span>
-          <em v-if="backupFileName">{{ backupFileName }}</em>
-          <em v-if="backupLastSaved">Last saved {{ formatSaved(backupLastSaved) }}</em>
+
+        <div class="location-preview">
+          <MapPin :size="16" />
+          <span>{{ locationLine || 'Country and city will appear here.' }}</span>
         </div>
       </div>
+    </div>
 
-      <div class="db-actions">
-        <button
-          v-if="backupStatus === 'needs-permission'"
-          class="primary-btn"
-          @click="$emit('reconnect-backup')"
-        >
-          <RefreshCw :size="14" />
-          Reconnect
-        </button>
-        <button
-          v-else-if="backupStatus === 'off' || backupStatus === 'error'"
-          class="primary-btn"
-          :disabled="!backupSupported"
-          @click="$emit('choose-backup')"
-        >
-          <FolderOpen :size="14" />
-          Connect database file
-        </button>
-        <button
-          v-if="backupStatus === 'connected'"
-          class="ghost-btn"
-          @click="$emit('disable-backup')"
-        >
-          <Link2Off :size="14" />
-          Disconnect
-        </button>
-        <button class="ghost-btn" @click="$emit('download-backup')">
-          <Download :size="14" />
-          Download database
-        </button>
-        <button class="ghost-btn" @click="$emit('import-backup')">
-          <Upload :size="14" />
-          Open shared file
-        </button>
-        <button class="ghost-btn" @click="$emit('export-share')">
-          <Share2 :size="14" />
-          Share library
-        </button>
+    <!-- About ----------------------------------------------------------- -->
+    <div v-else-if="activeTab === 'about'" class="tab-panel">
+      <div class="panel-card">
+        <div class="card-heading">
+          <div>
+            <h3>About you</h3>
+            <p>A short introduction shown with shared articles.</p>
+          </div>
+          <span class="saved-pill">Auto-saved</span>
+        </div>
+
+        <label class="field">
+          <span class="field-label">Bio</span>
+          <textarea
+            :value="profile.bio"
+            maxlength="600"
+            rows="7"
+            placeholder="e.g. Learning Chinese one paragraph at a time. Ask me about my favourite stories!"
+            class="text-input textarea"
+            @input="updateField('bio', $event.target.value)"
+          ></textarea>
+        </label>
+        <p class="char-count">{{ (profile.bio || '').length }} / 600</p>
       </div>
+    </div>
 
-      <p v-if="!backupSupported" class="db-note">
-        This browser cannot write files automatically. Downloading a database
-        file still works everywhere.
-      </p>
+    <!-- Fonts ----------------------------------------------------------- -->
+    <div v-else-if="activeTab === 'fonts'" class="tab-panel">
+      <SettingsPanel
+        section="fonts"
+        :settings="settings"
+        @save="$emit('save-settings', $event)"
+        @reset="$emit('reset-settings')"
+      />
+    </div>
+
+    <!-- Settings -------------------------------------------------------- -->
+    <div v-else-if="activeTab === 'settings'" class="tab-panel">
+      <SettingsPanel
+        section="display"
+        :settings="settings"
+        @save="$emit('save-settings', $event)"
+        @reset="$emit('reset-settings')"
+      />
+    </div>
+
+    <!-- Data ------------------------------------------------------------ -->
+    <div v-else-if="activeTab === 'data'" class="tab-panel">
+      <div class="panel-card">
+        <div class="card-heading">
+          <div>
+            <h3>Database &amp; export</h3>
+            <p>
+              Keep a durable copy of your library, profile, and reading
+              progress on this device.
+            </p>
+          </div>
+          <span class="db-pill" :class="statusTone">{{ statusLabel }}</span>
+        </div>
+
+        <div class="db-status">
+          <div class="db-icon" :class="statusTone">
+            <ShieldCheck v-if="backupStatus === 'connected'" :size="19" />
+            <AlertTriangle
+              v-else-if="backupStatus === 'needs-permission' || backupStatus === 'error'"
+              :size="19"
+            />
+            <Database v-else :size="19" />
+          </div>
+          <div class="db-copy">
+            <strong>{{ statusTitle }}</strong>
+            <span>{{ statusDetail }}</span>
+            <em v-if="backupFileName">{{ backupFileName }}</em>
+            <em v-if="backupLastSaved">Last saved {{ formatSaved(backupLastSaved) }}</em>
+          </div>
+        </div>
+
+        <div class="db-actions">
+          <button
+            v-if="backupStatus === 'needs-permission'"
+            class="primary-btn"
+            type="button"
+            @click="$emit('reconnect-backup')"
+          >
+            <RefreshCw :size="14" />
+            Reconnect
+          </button>
+          <button
+            v-else-if="backupStatus === 'off' || backupStatus === 'error'"
+            class="primary-btn"
+            type="button"
+            :disabled="!backupSupported"
+            @click="$emit('choose-backup')"
+          >
+            <FolderOpen :size="14" />
+            Connect database file
+          </button>
+          <button
+            v-if="backupStatus === 'connected'"
+            class="ghost-btn"
+            type="button"
+            @click="$emit('disable-backup')"
+          >
+            <Link2Off :size="14" />
+            Disconnect
+          </button>
+          <button class="ghost-btn" type="button" @click="$emit('download-backup')">
+            <Download :size="14" />
+            Download database
+          </button>
+          <button class="ghost-btn" type="button" @click="$emit('import-backup')">
+            <Upload :size="14" />
+            Open shared file
+          </button>
+          <button class="ghost-btn" type="button" @click="$emit('export-share')">
+            <Share2 :size="14" />
+            Share library
+          </button>
+        </div>
+
+        <p v-if="!backupSupported" class="db-note">
+          This browser cannot write files automatically. Downloading a database
+          file still works everywhere.
+        </p>
+
+        <div class="data-stats">
+          <div class="data-stat">
+            <strong>{{ articleCount }}</strong>
+            <span>{{ articleCount === 1 ? 'article' : 'articles' }}</span>
+          </div>
+          <div class="data-stat">
+            <strong>{{ profile.photo ? 'Yes' : 'No' }}</strong>
+            <span>profile photo saved</span>
+          </div>
+        </div>
+
+        <p class="db-note">
+          Backups include your profile details and photo, so restoring the file
+          on another device brings your identity with it.
+        </p>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
-  ScanLine,
+  Camera,
+  MapPin,
+  User,
+  FileText,
+  Type,
+  Settings,
   Database,
+  ScanLine,
   ShieldCheck,
   AlertTriangle,
   RefreshCw,
@@ -179,9 +359,14 @@ import {
   Upload,
   Share2,
 } from 'lucide-vue-next'
+import SettingsPanel from './SettingsPanel.vue'
 
 const props = defineProps({
   profile: {
+    type: Object,
+    required: true,
+  },
+  settings: {
     type: Object,
     required: true,
   },
@@ -195,6 +380,8 @@ const props = defineProps({
 const emit = defineEmits([
   'update-profile',
   'reset-profile',
+  'save-settings',
+  'reset-settings',
   'choose-backup',
   'reconnect-backup',
   'disable-backup',
@@ -203,6 +390,23 @@ const emit = defineEmits([
   'export-share',
   'scan-qr',
 ])
+
+const tabs = [
+  { id: 'profile', label: 'Profile', icon: User },
+  { id: 'location', label: 'Location', icon: MapPin },
+  { id: 'about', label: 'About', icon: FileText },
+  { id: 'fonts', label: 'Fonts', icon: Type },
+  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'data', label: 'Data', icon: Database },
+]
+
+const activeTab = ref('profile')
+const photoInput = ref(null)
+const photoError = ref('')
+
+const MAX_PHOTO_BYTES = 12 * 1024 * 1024
+const PHOTO_SIZE = 256
+const PHOTO_MAX_CHARS = 400000
 
 const initials = computed(() => {
   const name = (props.profile.name || '').trim()
@@ -213,6 +417,13 @@ const initials = computed(() => {
     .map((part) => part[0])
     .join('')
     .toUpperCase()
+})
+
+const locationLine = computed(() => {
+  const parts = [props.profile.city, props.profile.country]
+    .map((part) => (part || '').trim())
+    .filter(Boolean)
+  return parts.join(', ')
 })
 
 const statusTone = computed(() => {
@@ -279,6 +490,88 @@ const formatSaved = (timestamp) => {
 const updateField = (key, value) => {
   emit('update-profile', { ...props.profile, [key]: value })
 }
+
+const pickPhoto = () => {
+  photoError.value = ''
+  photoInput.value?.click()
+}
+
+const removePhoto = () => {
+  photoError.value = ''
+  emit('update-profile', { ...props.profile, photo: '' })
+}
+
+// Resize and center-crop the chosen image so a profile photo stays small
+// enough for localStorage and backup files.
+const processPhoto = (dataUrl) => {
+  const image = new Image()
+  image.onload = () => {
+    const sourceSize = Math.min(image.width, image.height)
+    if (!sourceSize) {
+      photoError.value = 'That image could not be read.'
+      return
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = PHOTO_SIZE
+    canvas.height = PHOTO_SIZE
+    const context = canvas.getContext('2d')
+    if (!context) {
+      photoError.value = 'Your browser could not process that image.'
+      return
+    }
+
+    context.drawImage(
+      image,
+      (image.width - sourceSize) / 2,
+      (image.height - sourceSize) / 2,
+      sourceSize,
+      sourceSize,
+      0,
+      0,
+      PHOTO_SIZE,
+      PHOTO_SIZE,
+    )
+
+    let photo = canvas.toDataURL('image/jpeg', 0.84)
+    if (photo.length > PHOTO_MAX_CHARS) {
+      photo = canvas.toDataURL('image/jpeg', 0.6)
+    }
+    if (photo.length > PHOTO_MAX_CHARS) {
+      photoError.value = 'That photo is still too large. Try a smaller image.'
+      return
+    }
+
+    emit('update-profile', { ...props.profile, photo })
+  }
+  image.onerror = () => {
+    photoError.value = 'That file is not a supported image.'
+  }
+  image.src = dataUrl
+}
+
+const handlePhotoFile = (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  photoError.value = ''
+  if (!file.type.startsWith('image/')) {
+    photoError.value = 'Choose an image file (JPEG, PNG, WebP, or GIF).'
+    return
+  }
+  if (file.size > MAX_PHOTO_BYTES) {
+    photoError.value = 'Choose an image smaller than 12 MB.'
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = () => processPhoto(String(reader.result || ''))
+  reader.onerror = () => {
+    photoError.value = 'That image could not be read.'
+  }
+  reader.readAsDataURL(file)
+}
 </script>
 
 <style scoped>
@@ -286,34 +579,76 @@ const updateField = (key, value) => {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  padding: 22px 16px 120px;
+  padding: 22px 16px 130px;
 }
 
 .profile-hero {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
   padding: 20px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid #e9ecef;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
 }
 
-.avatar {
-  width: 58px;
-  height: 58px;
-  border-radius: 18px;
+.avatar-button {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  padding: 0;
+  border: none;
+  border-radius: 24px;
+  overflow: visible;
+  background: linear-gradient(135deg, #4a6cf7 0%, #6c5ce7 100%);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 8px 18px rgba(74, 108, 247, 0.28);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 24px;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-initials {
+  width: 100%;
+  height: 100%;
+  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  background: linear-gradient(135deg, #4a6cf7 0%, #6c5ce7 100%);
   color: white;
-  font-size: 21px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.avatar-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #e9ecef;
+  color: #4a6cf7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.14);
+}
+
+.hero-copy {
+  flex: 1;
+  min-width: 180px;
 }
 
 .hero-copy h2 {
@@ -323,11 +658,103 @@ const updateField = (key, value) => {
   color: #1f2937;
 }
 
-.hero-copy p {
-  margin: 3px 0 0;
+.hero-location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 0;
   font-size: 12px;
-  line-height: 1.5;
-  color: #6b7280;
+  color: #4a6cf7;
+  font-weight: 600;
+}
+
+.hero-note {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.photo-input {
+  display: none;
+}
+
+.photo-error {
+  margin: -4px 0 12px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.profile-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 5px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #e9ecef;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.profile-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.profile-tab {
+  flex: 1;
+  min-width: 88px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s;
+}
+
+.profile-tab:hover {
+  background: #f8f9fa;
+  color: #334155;
+}
+
+.profile-tab.active {
+  background: #eef1ff;
+  border-color: #d8defb;
+  color: #4a6cf7;
+  box-shadow: 0 3px 9px rgba(74, 108, 247, 0.12);
+}
+
+.tab-panel {
+  animation: panelIn 0.18s ease;
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .panel-card {
@@ -442,11 +869,31 @@ const updateField = (key, value) => {
   min-height: 74px;
 }
 
+.char-count {
+  margin: 7px 0 0;
+  text-align: right;
+  font-size: 10.5px;
+  color: #adb5bd;
+}
+
 .panel-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.location-preview {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: #f8f9fa;
+  border: 1px dashed #dbe1e8;
+  color: #64748b;
+  font-size: 12.5px;
 }
 
 .db-status {
@@ -560,6 +1007,17 @@ const updateField = (key, value) => {
   border-color: #cbd5e1;
 }
 
+.ghost-btn.small {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.ghost-btn.danger {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
 .db-note {
   margin: 10px 0 0;
   font-size: 11px;
@@ -567,9 +1025,36 @@ const updateField = (key, value) => {
   color: #94a3b8;
 }
 
+.data-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.data-stat {
+  padding: 12px;
+  border-radius: 11px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+}
+
+.data-stat strong {
+  display: block;
+  font-size: 18px;
+  color: #1f2937;
+}
+
+.data-stat span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
 @media (max-width: 640px) {
   .profile-panel {
-    padding: 16px 12px 118px;
+    padding: 16px 12px 128px;
   }
 
   .field-grid {
@@ -578,6 +1063,20 @@ const updateField = (key, value) => {
 
   .profile-hero {
     padding: 16px;
+  }
+
+  .hero-actions {
+    width: 100%;
+  }
+
+  .profile-tab {
+    min-width: 74px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+
+  .data-stats {
+    grid-template-columns: 1fr;
   }
 }
 </style>

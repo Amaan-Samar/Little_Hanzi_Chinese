@@ -4,22 +4,18 @@
     @dragover.prevent
     @drop.prevent="handleFileDrop"
   >
-    <!-- Header with Logo and Settings -->
+    <!-- Header with Logo and article actions -->
     <div class="app-header">
       <div class="logo-section">
         <h1 class="logo">LittleHanzi</h1>
       </div>
       <div class="header-buttons">
-        <!-- Only show article actions when there is an article to act on. -->
         <button
-          v-if="inputText.trim()"
-          class="save-icon-btn"
-          @click="handleManualSave"
-          title="Save Article"
-          :disabled="isSaving"
+          class="new-tab-btn"
+          @click="openNewTab"
+          title="New article tab"
         >
-          <Save :size="20" />
-          <span v-if="isSaving" class="save-spinner"></span>
+          <Plus :size="20" />
         </button>
 
         <button
@@ -34,14 +30,35 @@
         <button class="scan-icon-btn" @click="openScanner" title="Scan a QR code">
           <ScanLine :size="21" />
         </button>
-        <button class="settings-icon-btn" @click="openSettingsModal" title="Settings">
-          <Settings :size="24" />
-        </button>
         <button class="info-icon-btn" @click="openInfoModal" title="Information">
           <Info :size="22" />
         </button>
       </div>
     </div>
+
+    <!-- Open articles: switch contexts without losing the editor state. -->
+    <div v-if="workspaceTabs.length > 1" class="workspace-tabs">
+      <div class="workspace-tabs-scroll">
+        <button
+          v-for="tab in workspaceTabs"
+          :key="tab.key"
+          class="workspace-tab"
+          :class="{ active: tab.key === activeTabKey }"
+          @click="activateTab(tab)"
+        >
+          <span class="workspace-tab-title">{{ tabTitle(tab) }}</span>
+          <span
+            class="workspace-tab-close"
+            role="button"
+            title="Close tab"
+            @click.stop="closeTab(tab.key)"
+          >
+            <X :size="12" />
+          </span>
+        </button>
+      </div>
+    </div>
+
     <!-- Info Modal -->
     <InfoModal
       :isOpen="isInfoModalOpen"
@@ -165,15 +182,6 @@
         :fontFamily="getFontFamily"
         @close="closeEditModal"
         @save="saveEditModalContent"
-      />
-
-      <!-- Settings Modal -->
-      <SettingsModal
-        :isOpen="isSettingsModalOpen"
-        :settings="settings"
-        @close="closeSettingsModal"
-        @save="saveSettings"
-        @reset="resetToDefaults"
       />
 
       <div v-if="inputText.trim() && (showEnglish || showChinese)" class="comparison-section">
@@ -358,7 +366,20 @@
                        fontSize: line.type === 'chinese' ? `${fontSize}px` : `${englishFontSize}px`,
                        fontFamily: line.type === 'chinese' ? getFontFamily : '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif'
                      }">
-                  <span v-if="line.type === 'chinese'" v-html="line.content"></span>
+                  <span v-if="line.type === 'chinese'" class="interleaved-chinese">
+                    <span
+                      v-for="(pair, pairIndex) in line.pairs"
+                      :key="pairIndex"
+                      class="interleaved-pair"
+                    >
+                      <span class="character">{{ pair[0] }}</span>
+                      <span
+                        v-if="showPinyin && pair[1]"
+                        class="pinyin"
+                        :style="{ fontSize: `${pinyinFontSize}px` }"
+                      >{{ pair[1] }}</span>
+                    </span>
+                  </span>
                   <span v-else>{{ line.content }}</span>
                 </div>
               </div>
@@ -408,6 +429,7 @@
       <div v-show="activeView === 'profile'" class="profile-view">
         <ProfilePanel
           :profile="profile"
+          :settings="settings"
           :backupSupported="backupSupported"
           :backupStatus="backupStatus"
           :backupFileName="backupFileName"
@@ -415,6 +437,8 @@
           :articleCount="articles.length"
           @update-profile="updateProfile"
           @reset-profile="handleResetProfile"
+          @save-settings="saveSettings"
+          @reset-settings="resetToDefaults"
           @choose-backup="handleChooseBackup"
           @reconnect-backup="handleReconnectBackup"
           @disable-backup="handleDisableBackup"
@@ -484,8 +508,8 @@ import InfoModal from './InfoModal.vue';
 import { useArticleHistory } from '../composables/useArticleHistory';
 import {
   Edit as EditIcon,
-  Settings,
-  Save,
+  Plus,
+  X,
   Info,
   Bookmark,
   BookMarked,
@@ -498,7 +522,6 @@ import {
 } from 'lucide-vue-next';
 import EditModal from './EditModal.vue';
 import ConfirmModal from './ConfirmModal.vue';
-import SettingsModal from './SettingsModal.vue';
 import ShareModal from './ShareModal.vue';
 import BackupModal from './BackupModal.vue';
 import ScannerModal from './ScannerModal.vue';
@@ -529,7 +552,6 @@ export default {
     InfoModal,
     EditModal,
     ConfirmModal,
-    SettingsModal,
     ShareModal,
     BackupModal,
     ScannerModal,
@@ -539,8 +561,8 @@ export default {
     // Options API components must be registered here. Returning an icon from
     // setup() only exposes it as data, so the template cannot render it.
     EditIcon,
-    Settings,
-    Save,
+    Plus,
+    X,
     Info,
     Bookmark,
     BookMarked,
@@ -564,7 +586,8 @@ export default {
       pinyinFontSize,
       englishFontSize,
       displayName,
-      resetSettings
+      resetSettings,
+      saveCurrentSettings
     } = useSettings()
 
     const {
@@ -573,15 +596,10 @@ export default {
       createArticle,
       updateArticle,
       setCurrentArticle,
-      clearCurrentArticle,
-      flushAutoSave,
-      scheduleAutoSave,
-      cancelAutoSave,
       deleteArticle,
       deleteAllArticles,
       isCurrentArticle,
       formatDate,
-      isSaving,
       setBookmark,
       getResumeArticle,
       clearLastSession,
@@ -613,6 +631,12 @@ export default {
       phone: profilePhone,
       address: profileAddress,
       occupation: profileOccupation,
+      country: profileCountry,
+      city: profileCity,
+      bio: profileBio,
+      photo: profilePhoto,
+      applyProfile,
+      snapshot: profileSnapshot,
       resetProfile,
     } = useProfile()
 
@@ -632,7 +656,6 @@ export default {
     };
 
     const showConfirmModal = ref(false);
-    const isSettingsModalOpen = ref(false);
     const isInfoModalOpen = ref(false);
     const containerWidth = ref(800); // Default container width
     const isLoading = ref(false); // Add loading state
@@ -656,8 +679,37 @@ export default {
     const isBackupModalOpen = ref(false)
     const isScannerModalOpen = ref(false)
     const shareTarget = ref(null)
-    const lastSavedContent = ref({ chinese: '', english: '' })
     const resumeArticle = ref(null)
+
+    // ---------- Open article tabs ----------
+    // Each tab carries its own editor content. Article-backed tabs restore
+    // from the article library; English-first drafts stay in the workspace
+    // until Chinese text arrives and an article can be created.
+    const WORKSPACE_KEY = 'littleHanzi_workspace'
+    const ARTICLE_SAVE_DELAY = 150
+    const workspaceTabs = ref([])
+    const activeTabKey = ref(null)
+    let articleSaveTimer = null
+    let workspaceSaveTimer = null
+
+    const activeTab = computed(
+      () => workspaceTabs.value.find((tab) => tab.key === activeTabKey.value) || null
+    )
+
+    const makeTabKey = () =>
+      `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+
+    const makeTab = (overrides = {}) => ({
+      key: overrides.key || makeTabKey(),
+      articleId: null,
+      chinese: '',
+      english: '',
+      bookmark: null,
+      // A detached tab keeps its text but does not auto-create an article.
+      // This avoids resurrecting an article the reader just deleted.
+      detached: false,
+      ...overrides,
+    })
 
     const profile = computed(() => ({
       name: profileName.value,
@@ -665,16 +717,16 @@ export default {
       phone: profilePhone.value,
       address: profileAddress.value,
       occupation: profileOccupation.value,
+      country: profileCountry.value,
+      city: profileCity.value,
+      bio: profileBio.value,
+      photo: profilePhoto.value,
     }))
 
     const updateProfile = (next) => {
       if (!next) return
-      profileName.value = (next.name || '').slice(0, 40)
-      profileEmail.value = (next.email || '').slice(0, 120)
-      profilePhone.value = (next.phone || '').slice(0, 40)
-      profileAddress.value = (next.address || '').slice(0, 240)
-      profileOccupation.value = (next.occupation || '').slice(0, 80)
-      // Keep sharing and the old settings field in sync with the profile.
+      applyProfile(next)
+      // Sharing and the old settings field follow the profile name.
       displayName.value = profileName.value
     }
 
@@ -701,16 +753,6 @@ export default {
         showSaveToast.value = false
       }, duration)
     }
-
-    // Add watchers for auto-save
-    watch([inputText, englishText], ([newChinese, newEnglish]) => {
-      if (newChinese && newChinese.trim()) {
-        scheduleAutoSave(newChinese, newEnglish)
-        lastSavedContent.value = { chinese: newChinese, english: newEnglish }
-      } else {
-        cancelAutoSave()
-      }
-    }, { deep: true })
 
     // History lives in its own bottom-nav tab now.
     const openHistoryModal = () => {
@@ -739,6 +781,7 @@ export default {
 
     const shareCurrentArticle = () => {
       if (!inputText.value.trim()) return
+      flushActiveTab()
 
       const current = currentArticleId.value
         ? articles.value.find((item) => item.id === currentArticleId.value)
@@ -767,9 +810,18 @@ export default {
     const datedName = (prefix) =>
       `${prefix}-${new Date().toISOString().slice(0, 10)}.json`
 
-    const backupData = () => makeBackupBundle(articles.value)
+    const backupData = () => makeBackupBundle(articles.value, profileSnapshot())
+
+    const applyBundleProfile = (bundle) => {
+      if (bundle?.kind === 'backup' && bundle.profile) {
+        applyProfile(bundle.profile)
+        displayName.value = bundle.profile.name || ''
+      }
+    }
 
     watch(articles, () => scheduleBackup(backupData), { deep: true })
+    // Profile changes (including a new photo) belong in automatic backups too.
+    watch(profile, () => scheduleBackup(backupData), { deep: true })
 
     const openBackupModal = () => {
       isBackupModalOpen.value = true
@@ -812,6 +864,7 @@ export default {
       }
 
       const { added, merged } = importBundle(parsed.bundle)
+      applyBundleProfile(parsed.bundle)
       if (!added && !merged) {
         showToastMessage('Nothing new to import.', 'info')
         return true
@@ -1015,6 +1068,7 @@ export default {
 
       if (parsed.kind === 'bundle') {
         const { added, merged } = importBundle(parsed.bundle)
+        applyBundleProfile(parsed.bundle)
         if (added || merged) {
           activeView.value = 'history'
           showToastMessage(
@@ -1041,34 +1095,308 @@ export default {
       }
     }
 
-    const loadArticleIntoEditor = async (article) => {
-      isLoading.value = true
-      loadingText.value = 'Loading article...'
-      await new Promise((resolve) => setTimeout(resolve, 200))
+    // ---------- Article tabs & instant autosave ----------
+    const tabTitle = (tab) => {
+      const source = (tab?.chinese || '').trim() || (tab?.english || '').trim()
+      if (!source) return 'New article'
+      const first = splitParagraphs(source)[0] || source
+      const text = first.replace(/\s+/g, ' ').trim()
+      return text.length > 30 ? `${text.slice(0, 30)}…` : text
+    }
 
+    const persistWorkspaceNow = () => {
+      if (workspaceSaveTimer) {
+        clearTimeout(workspaceSaveTimer)
+        workspaceSaveTimer = null
+      }
+      try {
+        const payload = {
+          version: 1,
+          activeKey: activeTabKey.value,
+          tabs: workspaceTabs.value.map((tab) => {
+            const hasArticle =
+              tab.articleId &&
+              articles.value.some((article) => article.id === tab.articleId)
+            return {
+              key: tab.key,
+              articleId: tab.articleId || null,
+              // Article-backed tabs reload from the library, so their text is
+              // not duplicated in localStorage.
+              chinese: hasArticle ? '' : tab.chinese,
+              english: hasArticle ? '' : tab.english,
+              bookmark: tab.bookmark ?? null,
+              detached: Boolean(tab.detached),
+            }
+          }),
+        }
+        localStorage.setItem(WORKSPACE_KEY, JSON.stringify(payload))
+      } catch (error) {
+        console.error('Failed to save open tabs:', error)
+      }
+    }
+
+    const scheduleWorkspaceSave = () => {
+      if (workspaceSaveTimer) clearTimeout(workspaceSaveTimer)
+      workspaceSaveTimer = setTimeout(() => {
+        workspaceSaveTimer = null
+        persistWorkspaceNow()
+      }, 250)
+    }
+
+    const saveTabToArticle = (tab) => {
+      if (!tab) return
+      const chinese = tab.chinese || ''
+      const english = tab.english || ''
+
+      // Without Chinese text there is no article yet. Keep the tab as a draft
+      // so pasting English first still lands in the same context later.
+      if (!chinese.trim()) {
+        if (tab.articleId) tab.articleId = null
+        return
+      }
+
+      // The reader deleted this article; keep the text as a detached draft
+      // until they edit it again.
+      if (tab.detached) return
+
+      const existing = tab.articleId
+        ? articles.value.find((article) => article.id === tab.articleId)
+        : null
+
+      if (existing) {
+        if (
+          existing.chineseContent === chinese &&
+          existing.englishContent === english
+        ) {
+          return
+        }
+        updateArticle(existing.id, {
+          chineseContent: chinese,
+          englishContent: english,
+        })
+        return
+      }
+
+      const article = createArticle(chinese, english)
+      if (article) {
+        tab.articleId = article.id
+        tab.bookmark = article.bookmark ?? null
+      }
+    }
+
+    const flushActiveTab = () => {
+      const tab = activeTab.value
+      if (!tab) {
+        persistWorkspaceNow()
+        return
+      }
+      tab.chinese = inputText.value
+      tab.english = englishText.value
+      if (articleSaveTimer) {
+        clearTimeout(articleSaveTimer)
+        articleSaveTimer = null
+      }
+      saveTabToArticle(tab)
+      persistWorkspaceNow()
+    }
+
+    const scheduleArticleSave = () => {
+      if (articleSaveTimer) clearTimeout(articleSaveTimer)
+      articleSaveTimer = setTimeout(() => {
+        articleSaveTimer = null
+        const tab = activeTab.value
+        if (!tab) return
+        tab.chinese = inputText.value
+        tab.english = englishText.value
+        saveTabToArticle(tab)
+        persistWorkspaceNow()
+      }, ARTICLE_SAVE_DELAY)
+    }
+
+    const applyTabToEditor = (tab, { scroll = true } = {}) => {
+      if (!tab) return
       const bookmark =
-        article.bookmark === null || article.bookmark === undefined
+        tab.bookmark === null || tab.bookmark === undefined
           ? null
-          : Number(article.bookmark)
+          : Number(tab.bookmark)
 
-      inputText.value = article.chineseContent || ''
-      englishText.value = article.englishContent || ''
+      inputText.value = tab.chinese || ''
+      englishText.value = tab.english || ''
       currentBookmark.value = Number.isFinite(bookmark) ? bookmark : null
+      pendingBookmark.value = null
+      focusedParagraph.value = null
+      closeParagraphMenu()
       resumeArticle.value = null
-      cancelAutoSave()
-      setCurrentArticle(article.id)
-      markArticleRead(article.id)
+      setCurrentArticle(tab.articleId || null)
+      if (tab.articleId) markArticleRead(tab.articleId)
+      activeView.value = 'home'
 
-      isLoading.value = false
-
-      if (currentBookmark.value !== null) {
+      if (scroll && currentBookmark.value !== null) {
         if (comparisonData.value[currentBookmark.value]) {
-          await nextTick()
-          scrollToBookmark(currentBookmark.value)
+          nextTick(() => scrollToBookmark(currentBookmark.value))
         } else {
           pendingBookmark.value = currentBookmark.value
         }
       }
+    }
+
+    const activateTab = (tab) => {
+      if (!tab) return
+      if (tab.key === activeTabKey.value) {
+        activeView.value = 'home'
+        return
+      }
+      flushActiveTab()
+      activeTabKey.value = tab.key
+      applyTabToEditor(tab)
+      persistWorkspaceNow()
+    }
+
+    const openNewTab = () => {
+      flushActiveTab()
+      const tab = makeTab()
+      workspaceTabs.value.push(tab)
+      activeTabKey.value = tab.key
+      applyTabToEditor(tab, { scroll: false })
+      persistWorkspaceNow()
+      nextTick(() => chineseTextareaRef.value?.focus())
+    }
+
+    const closeTab = (key) => {
+      const index = workspaceTabs.value.findIndex((tab) => tab.key === key)
+      if (index < 0) return
+
+      const wasActive = activeTabKey.value === key
+      if (wasActive) flushActiveTab()
+
+      workspaceTabs.value.splice(index, 1)
+      if (!workspaceTabs.value.length) workspaceTabs.value.push(makeTab())
+
+      if (wasActive) {
+        const next =
+          workspaceTabs.value[
+            Math.min(index, workspaceTabs.value.length - 1)
+          ]
+        activeTabKey.value = next.key
+        applyTabToEditor(next)
+      }
+      persistWorkspaceNow()
+    }
+
+    // Keep the active tab and the article it points at in sync while typing.
+    watch([inputText, englishText], () => {
+      const tab = activeTab.value
+      if (!tab) return
+      if (tab.chinese === inputText.value && tab.english === englishText.value) {
+        return
+      }
+      tab.chinese = inputText.value
+      tab.english = englishText.value
+      tab.detached = false
+      resumeArticle.value = null
+      scheduleArticleSave()
+      scheduleWorkspaceSave()
+    })
+
+    // Leaving the editor is a save point, just like switching VS Code tabs.
+    watch(activeView, (view) => {
+      if (view !== 'home') flushActiveTab()
+    })
+
+    const loadArticleIntoEditor = async (article) => {
+      if (!article) return
+      const articleId = article.id
+      const previous = activeTab.value
+
+      // A share may update the article that is already open. Push the fresh
+      // text into the editor before flushing so the update is not overwritten.
+      if (previous && previous.articleId === articleId) {
+        previous.chinese = article.chineseContent || ''
+        previous.english = article.englishContent || ''
+        previous.detached = false
+        previous.bookmark =
+          article.bookmark === null || article.bookmark === undefined
+            ? null
+            : Number(article.bookmark)
+        inputText.value = previous.chinese
+        englishText.value = previous.english
+      }
+
+      flushActiveTab()
+
+      let tab = workspaceTabs.value.find((item) => item.articleId === articleId)
+      if (!tab) {
+        tab = makeTab({
+          articleId,
+          chinese: article.chineseContent || '',
+          english: article.englishContent || '',
+          bookmark:
+            article.bookmark === null || article.bookmark === undefined
+              ? null
+              : Number(article.bookmark),
+        })
+        workspaceTabs.value.push(tab)
+      } else {
+        tab.chinese = article.chineseContent || ''
+        tab.english = article.englishContent || ''
+        tab.detached = false
+        tab.bookmark =
+          article.bookmark === null || article.bookmark === undefined
+            ? null
+            : Number(article.bookmark)
+      }
+
+      activeTabKey.value = tab.key
+      applyTabToEditor(tab)
+      persistWorkspaceNow()
+    }
+
+    const restoreWorkspace = () => {
+      let parsed = null
+      try {
+        parsed = JSON.parse(localStorage.getItem(WORKSPACE_KEY) || 'null')
+      } catch (error) {
+        console.error('Failed to restore open tabs:', error)
+      }
+
+      let tabs = []
+      if (parsed && Array.isArray(parsed.tabs)) {
+        tabs = parsed.tabs
+          .filter((raw) => raw && typeof raw === 'object')
+          .map((raw) => {
+            const article = raw.articleId
+              ? articles.value.find((item) => item.id === raw.articleId)
+              : null
+            return makeTab({
+              key:
+                typeof raw.key === 'string' && raw.key ? raw.key : undefined,
+              articleId: article?.id || raw.articleId || null,
+              chinese: article
+                ? article.chineseContent || ''
+                : raw.chinese || '',
+              english: article
+                ? article.englishContent || ''
+                : raw.english || '',
+              bookmark: article
+                ? article.bookmark ?? null
+                : raw.bookmark ?? null,
+              detached: Boolean(raw.detached),
+            })
+          })
+      }
+
+      if (!tabs.length) tabs = [makeTab()]
+
+      workspaceTabs.value = tabs
+      const requestedKey = parsed?.activeKey
+      const activeKey = tabs.some((tab) => tab.key === requestedKey)
+        ? requestedKey
+        : tabs[0].key
+      activeTabKey.value = activeKey
+      applyTabToEditor(tabs.find((tab) => tab.key === activeKey), {
+        scroll: false,
+      })
+      persistWorkspaceNow()
     }
 
     const resumeReading = async () => {
@@ -1091,20 +1419,37 @@ export default {
     const handleDeleteArticle = (articleId) => {
       const wasCurrent = isCurrentArticle(articleId)
       deleteArticle(articleId)
+
+      // Keep any open tab readable by turning it into a draft.
+      workspaceTabs.value.forEach((tab) => {
+        if (tab.articleId === articleId) {
+          tab.articleId = null
+          tab.bookmark = null
+          tab.detached = true
+        }
+      })
+
       if (wasCurrent) {
         currentBookmark.value = null
         pendingBookmark.value = null
         focusedParagraph.value = null
         closeParagraphMenu()
       }
+      persistWorkspaceNow()
     }
 
     const handleDeleteAllArticles = () => {
       deleteAllArticles()
+      workspaceTabs.value.forEach((tab) => {
+        tab.articleId = null
+        tab.bookmark = null
+        tab.detached = true
+      })
       currentBookmark.value = null
       pendingBookmark.value = null
       focusedParagraph.value = null
       closeParagraphMenu()
+      persistWorkspaceNow()
     }
 
     const handleToggleArchive = (articleId) => {
@@ -1115,43 +1460,26 @@ export default {
       )
     }
 
-    // ---------- Manual save ----------
-    const handleManualSave = () => {
-      if (!inputText.value.trim()) return
-
-      let article
-      if (currentArticleId.value) {
-        flushAutoSave(inputText.value, englishText.value)
-        article = updateArticle(currentArticleId.value, {
-          chineseContent: inputText.value,
-          englishContent: englishText.value
-        })
-      } else {
-        article = createArticle(inputText.value, englishText.value)
-      }
-
-      if (article) {
-        resumeArticle.value = null
-        currentBookmark.value =
-          article.bookmark === null || article.bookmark === undefined
-            ? null
-            : Number(article.bookmark)
-        showToastMessage('🀄 Article saved successfully!')
-      }
+    // ---------- Bookmark toggle ----------
+    const ensureArticleForActiveTab = () => {
+      if (currentArticleId.value) return true
+      const tab = activeTab.value
+      if (tab) saveTabToArticle(tab)
+      return Boolean(currentArticleId.value)
     }
 
-    // ---------- Bookmark toggle ----------
     const toggleBookmark = (paragraphIndex) => {
       const index = Number(paragraphIndex)
-      if (!currentArticleId.value) {
-        const article = createArticle(inputText.value, englishText.value)
-        if (!article) return
-      }
+      if (!ensureArticleForActiveTab()) return
       if (!currentArticleId.value) return
 
       const nextBookmark = currentBookmark.value === index ? null : index
       currentBookmark.value = nextBookmark
       setBookmark(currentArticleId.value, nextBookmark)
+      if (activeTab.value) {
+        activeTab.value.bookmark = nextBookmark
+        scheduleWorkspaceSave()
+      }
     }
 
     // ---------- Paragraph likes ----------
@@ -1161,10 +1489,7 @@ export default {
     }
 
     const toggleLike = (paragraphIndex) => {
-      if (!currentArticleId.value) {
-        const article = createArticle(inputText.value, englishText.value)
-        if (!article) return
-      }
+      if (!ensureArticleForActiveTab()) return
       if (!currentArticleId.value) return
 
       const liked = toggleParagraphLike(currentArticleId.value, paragraphIndex)
@@ -1300,7 +1625,7 @@ export default {
       closeParagraphMenu()
     }
 
-    // Settings object for modal
+    // Settings object shared with the Profile tabs
     const settings = computed(() => ({
       fontSize: Number(fontSize.value),
       selectedFont: selectedFont.value,
@@ -1322,11 +1647,8 @@ export default {
       }
     }
 
-    // Split text into lines based on container width
-    const splitTextIntoLines = (text, width, fontSz, fontFamily, isChinese = true) => {
-      if (!text || !width || width <= 0) return [text]
-      
-      // Create a hidden measuring element
+    // Create the hidden element used to measure wrapped line widths.
+    const createMeasureDiv = (width, fontSz, fontFamily) => {
       const measureDiv = document.createElement('div')
       measureDiv.style.position = 'absolute'
       measureDiv.style.visibility = 'hidden'
@@ -1342,10 +1664,19 @@ export default {
       measureDiv.style.padding = '0'
       measureDiv.style.margin = '0'
       document.body.appendChild(measureDiv)
-      
+      return measureDiv
+    }
+
+    // Split text into lines based on container width
+    const splitTextIntoLines = (text, width, fontSz, fontFamily, isChinese = true) => {
+      if (!text || !width || width <= 0) return [text]
+
+      const measureDiv = createMeasureDiv(width, fontSz, fontFamily)
+      const oneLineHeight = Math.ceil(fontSz * 1.7)
+
       const lines = []
       let currentLine = ''
-      
+
       // For Chinese text, we need to preserve the character+pinyin pairs
       let chars = []
       if (isChinese) {
@@ -1356,15 +1687,15 @@ export default {
         // For English, split by spaces and punctuation
         chars = text.split(/(\S+\s+|\S+$)/)
       }
-      
+
       chars = chars.filter(c => c && c.trim())
-      
+
       for (const char of chars) {
         const testLine = currentLine + char
         measureDiv.textContent = testLine
-        
-        // Check if adding this character exceeds line height
-        if (measureDiv.scrollHeight > 30) { // Height threshold (approx 1 line)
+
+        // Check if adding this character exceeds one line.
+        if (measureDiv.scrollHeight > oneLineHeight) {
           if (currentLine.trim()) {
             lines.push(currentLine.trim())
           }
@@ -1373,22 +1704,47 @@ export default {
           currentLine = testLine
         }
       }
-      
+
       if (currentLine.trim()) {
         lines.push(currentLine.trim())
       }
-      
+
       document.body.removeChild(measureDiv)
       return lines
     }
 
-    // Get Chinese text as plain string with pinyin
-    const getChineseWithPinyinText = (chineseText) => {
-      if (!chineseText) return ''
-      if (!showPinyin.value) return chineseText
-      
-      const pairs = getPinyinAndChar(chineseText)
-      return pairs.map(pair => pair[0] + (pair[1] || '')).join(' ')
+    // Split Chinese character/pinyin pairs into lines while keeping each pair
+    // together, so pinyin stays beside its character and can use its own size.
+    const splitPairsIntoLines = (pairs, width, fontSz, fontFamily) => {
+      if (!pairs?.length) return []
+      if (!width || width <= 0) return [pairs]
+
+      const measureDiv = createMeasureDiv(width, fontSz, fontFamily)
+      const oneLineHeight = Math.ceil(fontSz * 1.7)
+
+      const lines = []
+      let current = []
+      let currentText = ''
+
+      for (const pair of pairs) {
+        const token = `${pair[0]}${pair[1] || ''}`
+        const testLine = currentText + token
+        measureDiv.textContent = testLine
+
+        if (measureDiv.scrollHeight > oneLineHeight && current.length) {
+          lines.push(current)
+          current = [pair]
+          currentText = token
+        } else {
+          current.push(pair)
+          currentText = testLine
+        }
+      }
+
+      if (current.length) lines.push(current)
+
+      document.body.removeChild(measureDiv)
+      return lines
     }
 
     // Interleaved display data
@@ -1409,20 +1765,16 @@ export default {
         
         if (!showChinese.value && !showEnglish.value) continue
         
-        // Get Chinese text with pinyin
-        const chineseText = getChineseWithPinyinText(chinesePara)
-        
         // Split into lines based on container width
         let chineseLines = []
         let englishLines = []
         
-        if (showChinese.value && chineseText) {
-          chineseLines = splitTextIntoLines(
-            chineseText, 
-            containerWidth.value, 
-            fontSize.value, 
-            getFontFamily.value,
-            true
+        if (showChinese.value && chinesePara) {
+          chineseLines = splitPairsIntoLines(
+            getPinyinAndChar(chinesePara),
+            containerWidth.value,
+            fontSize.value,
+            getFontFamily.value
           )
         }
         
@@ -1452,7 +1804,7 @@ export default {
             if (lineIndex < chineseLines.length && showChinese.value) {
               interleaved.push({
                 type: 'chinese',
-                content: chineseLines[lineIndex]
+                pairs: chineseLines[lineIndex]
               })
             }
           }
@@ -1462,7 +1814,7 @@ export default {
             if (lineIndex < chineseLines.length && showChinese.value) {
               interleaved.push({
                 type: 'chinese',
-                content: chineseLines[lineIndex]
+                pairs: chineseLines[lineIndex]
               })
             }
             if (lineIndex < englishLines.length && showEnglish.value) {
@@ -1482,10 +1834,6 @@ export default {
       return interleavedBlocks
     })
 
-    const openSettingsModal = () => {
-      isSettingsModalOpen.value = true
-    }
-
     // Request clear with confirmation
     const requestClearAll = () => {
       if (inputText.value.trim() || englishText.value.trim()) {
@@ -1502,35 +1850,40 @@ export default {
       showConfirmModal.value = false
     }
 
-    const closeSettingsModal = () => {
-      isSettingsModalOpen.value = false
-    }
-
     const saveSettings = (newSettings) => {
-      fontSize.value = newSettings.fontSize
-      selectedFont.value = newSettings.selectedFont
-      showPinyin.value = newSettings.showPinyin
-      showEnglish.value = newSettings.showEnglish
-      showChinese.value = newSettings.showChinese
-      displayOrder.value = newSettings.displayOrder
-      interleaveLines.value = newSettings.interleaveLines
+      if (!newSettings) return
+
+      const nextSize = Math.min(
+        32,
+        Math.max(12, Number(newSettings.fontSize) || fontSize.value)
+      )
+
+      fontSize.value = nextSize
+      selectedFont.value = newSettings.selectedFont || selectedFont.value
+      showPinyin.value = Boolean(newSettings.showPinyin)
+      showEnglish.value = Boolean(newSettings.showEnglish)
+      showChinese.value = Boolean(newSettings.showChinese)
+      displayOrder.value =
+        newSettings.displayOrder === 'cn-en' ? 'cn-en' : 'en-cn'
+      interleaveLines.value = Boolean(newSettings.interleaveLines)
       pinyinFontSize.value = Math.min(
-        Number(newSettings.pinyinFontSize) || pinyinFontSize.value,
-        Number(newSettings.fontSize) || fontSize.value
+        nextSize,
+        Math.max(4, Number(newSettings.pinyinFontSize) || pinyinFontSize.value)
       )
       englishFontSize.value = Math.min(
-        Number(newSettings.englishFontSize) || englishFontSize.value,
-        Number(newSettings.fontSize) || fontSize.value
+        nextSize,
+        Math.max(4, Number(newSettings.englishFontSize) || englishFontSize.value)
       )
-      displayName.value = (newSettings.displayName || '').slice(0, 40)
-      // Keep the modal open for live preview; the Close button dismisses it.
-      // Recalculate lines when settings change
+
+      // Persist right away; closing the app must never lose a toggle.
+      saveCurrentSettings()
       nextTick(() => updateContainerWidth())
     }
 
     const resetToDefaults = () => {
       resetSettings()
-      closeSettingsModal()
+      saveCurrentSettings()
+      nextTick(() => updateContainerWidth())
     }
 
     const openEditModal = (type) => {
@@ -1677,7 +2030,8 @@ export default {
     //   }
     // };
 
-    // Update the clearText function to also reset tracking
+    // Clearing Chinese detaches the tab from its saved article so the article
+    // in History is never blanked. English-only text stays as a draft.
     const clearText = (type = 'both') => {
       if (type === 'chinese' || type === 'both') {
         inputText.value = '';
@@ -1686,11 +2040,21 @@ export default {
       if (type === 'english' || type === 'both') {
         englishText.value = '';
       }
-      
-      // Reset tracking when clearing
-      if (type === 'both' || (type === 'chinese' && !inputText.value.trim())) {
-        cancelAutoSave()
-        clearCurrentArticle()
+
+      const tab = activeTab.value
+      if (tab) {
+        tab.chinese = inputText.value
+        tab.english = englishText.value
+        if (type === 'both' || type === 'chinese') {
+          tab.articleId = null
+          tab.bookmark = null
+          tab.detached = true
+          setCurrentArticle(null)
+        }
+        scheduleWorkspaceSave()
+      }
+
+      if (type === 'both' || type === 'chinese') {
         currentBookmark.value = null
         pendingBookmark.value = null
         focusedParagraph.value = null
@@ -1871,7 +2235,13 @@ export default {
     })
 
     // ---------- Lifecycle ----------
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushActiveTab()
+    }
+
     onMounted(async () => {
+      restoreWorkspace()
+
       const openedShare = await handleIncomingShare()
       if (!openedShare) resumeArticle.value = getResumeArticle()
 
@@ -1880,13 +2250,18 @@ export default {
 
       document.addEventListener('click', handleDocumentClick)
       document.addEventListener('keydown', handleKeydown)
+      document.addEventListener('visibilitychange', handleVisibilityChange)
       window.addEventListener('hashchange', handleIncomingShare)
+      window.addEventListener('beforeunload', flushActiveTab)
     })
 
     onBeforeUnmount(() => {
+      flushActiveTab()
       document.removeEventListener('click', handleDocumentClick)
       document.removeEventListener('keydown', handleKeydown)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('hashchange', handleIncomingShare)
+      window.removeEventListener('beforeunload', flushActiveTab)
       if (toastTimeout) clearTimeout(toastTimeout)
     })
 
@@ -1954,7 +2329,14 @@ export default {
       interleaveLines,
       pinyinFontSize,
       englishFontSize,
-      isSaving,
+
+      // Open article tabs
+      workspaceTabs,
+      activeTabKey,
+      activateTab,
+      closeTab,
+      openNewTab,
+      tabTitle,
 
       isLoading, // Add to return
       loadingText, // Add to return
@@ -1970,9 +2352,6 @@ export default {
       resumeReading,
       dismissResume,
       handleChineseInput,
-
-      // Save
-      handleManualSave,
 
       // Paragraph interactions
       currentBookmark,
@@ -2003,8 +2382,8 @@ export default {
       
       // Modal related
       EditIcon,
-      Settings,
-      Save,
+      Plus,
+      X,
       Info,
       Bookmark,
       BookMarked,
@@ -2018,11 +2397,8 @@ export default {
       openEditModal,
       closeEditModal,
       saveEditModalContent,
-      
-      // Settings modal
-      isSettingsModalOpen,
-      openSettingsModal,
-      closeSettingsModal,
+
+      // Settings live in the Profile tab now.
       saveSettings,
       resetToDefaults,
 
@@ -2068,24 +2444,6 @@ export default {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin: 0;
-}
-
-.settings-icon-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  color: #495057;
-}
-
-.settings-icon-btn:hover {
-  background: #f8f9fa;
-  transform: rotate(90deg);
 }
 
 .main-content {
@@ -2362,6 +2720,14 @@ export default {
   color: #1a1a1a;
 }
 
+.interleaved-chinese {
+  display: inline;
+}
+
+.interleaved-pair {
+  display: inline;
+}
+
 .interleaved-line.english {
   color: #4a6cf7;
   /* margin-bottom: 4px; */
@@ -2459,7 +2825,98 @@ export default {
   align-items: center;
 }
 
-.history-icon-btn,
+.new-tab-btn {
+  background: #eef1ff;
+  border: 1px solid #d8defb;
+  color: #4a6cf7;
+  cursor: pointer;
+  padding: 7px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.new-tab-btn:hover {
+  background: #e0e6ff;
+  transform: scale(1.05);
+}
+
+/* Open article tabs */
+.workspace-tabs {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #e9ecef;
+  padding: 6px 16px 0;
+  backdrop-filter: blur(10px);
+}
+
+.workspace-tabs-scroll {
+  display: flex;
+  gap: 5px;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.workspace-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid #e9ecef;
+  border-bottom: none;
+  border-radius: 9px 9px 0 0;
+  background: #f8f9fa;
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.16s, color 0.16s;
+}
+
+.workspace-tab:hover {
+  background: #eef1ff;
+  color: #334155;
+}
+
+.workspace-tab.active {
+  background: white;
+  border-color: #d8defb;
+  color: #4a6cf7;
+  box-shadow: 0 -2px 0 #4a6cf7 inset;
+}
+
+.workspace-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 190px;
+}
+
+.workspace-tab-close {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.workspace-tab-close:hover {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+
 .share-icon-btn,
 .scan-icon-btn {
   background: transparent;
@@ -2474,16 +2931,13 @@ export default {
   color: #495057;
 }
 
-.history-icon-btn:hover,
 .share-icon-btn:hover,
 .scan-icon-btn:hover {
   background: #f8f9fa;
   transform: scale(1.05);
 }
 
-.save-icon-btn,
 .info-icon-btn {
-  position: relative;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -2496,32 +2950,9 @@ export default {
   color: #495057;
 }
 
-.save-icon-btn:hover:not(:disabled),
 .info-icon-btn:hover {
   background: #f8f9fa;
   transform: scale(1.05);
-}
-
-.save-icon-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.save-spinner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
-  border: 2px solid rgba(74, 108, 247, 0.2);
-  border-top-color: #4a6cf7;
-  border-radius: 50%;
-  animation: saveSpin 0.7s linear infinite;
-}
-
-@keyframes saveSpin {
-  to { transform: rotate(360deg); }
 }
 
 /* Toast notification */

@@ -4,8 +4,8 @@
       <button
         class="avatar-button"
         type="button"
-        title="Change profile photo"
-        @click="pickPhoto"
+        :title="profile.photo ? 'View profile photo' : 'Add profile photo'"
+        @click="openPhotoViewer"
       >
         <img
           v-if="profile.photo"
@@ -14,7 +14,9 @@
           class="avatar-image"
         />
         <span v-else class="avatar-initials">{{ initials }}</span>
-        <span class="avatar-badge"><Camera :size="13" /></span>
+        <span v-if="!profile.photo" class="avatar-badge">
+          <Camera :size="13" />
+        </span>
       </button>
 
       <div class="hero-copy">
@@ -26,21 +28,6 @@
         <p class="hero-note">
           Saved on this device and included in your database backups.
         </p>
-      </div>
-
-      <div class="hero-actions">
-        <button class="ghost-btn small" type="button" @click="pickPhoto">
-          <Camera :size="14" />
-          {{ profile.photo ? 'Change photo' : 'Add photo' }}
-        </button>
-        <button
-          v-if="profile.photo"
-          class="ghost-btn small danger"
-          type="button"
-          @click="removePhoto"
-        >
-          Remove
-        </button>
       </div>
 
       <input
@@ -336,6 +323,51 @@
         </p>
       </div>
     </div>
+
+    <!-- Full photo viewer: click the avatar to view, change, or remove it. -->
+    <Teleport to="body">
+      <div
+        v-if="isPhotoViewerOpen"
+        class="photo-viewer-overlay"
+        @click="closePhotoViewer"
+      >
+        <div class="photo-viewer" @click.stop>
+          <button
+            class="viewer-close"
+            type="button"
+            title="Close"
+            @click="closePhotoViewer"
+          >
+            <X :size="18" />
+          </button>
+
+          <img
+            :src="profile.photo"
+            alt="Profile photo"
+            class="photo-viewer-image"
+          />
+
+          <div class="viewer-actions">
+            <button
+              class="primary-btn"
+              type="button"
+              @click="changePhotoFromViewer"
+            >
+              <Camera :size="15" />
+              Change photo
+            </button>
+            <button
+              class="ghost-btn danger"
+              type="button"
+              @click="removePhotoFromViewer"
+            >
+              <Trash2 :size="15" />
+              Remove photo
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -358,6 +390,8 @@ import {
   Download,
   Upload,
   Share2,
+  X,
+  Trash2,
 } from 'lucide-vue-next'
 import SettingsPanel from './SettingsPanel.vue'
 
@@ -403,6 +437,7 @@ const tabs = [
 const activeTab = ref('profile')
 const photoInput = ref(null)
 const photoError = ref('')
+const isPhotoViewerOpen = ref(false)
 
 const MAX_PHOTO_BYTES = 12 * 1024 * 1024
 const PHOTO_SIZE = 256
@@ -499,6 +534,30 @@ const pickPhoto = () => {
 const removePhoto = () => {
   photoError.value = ''
   emit('update-profile', { ...props.profile, photo: '' })
+}
+
+// Clicking the avatar opens the full photo; with no photo it picks one.
+const openPhotoViewer = () => {
+  photoError.value = ''
+  if (props.profile.photo) {
+    isPhotoViewerOpen.value = true
+  } else {
+    pickPhoto()
+  }
+}
+
+const closePhotoViewer = () => {
+  isPhotoViewerOpen.value = false
+}
+
+const changePhotoFromViewer = () => {
+  isPhotoViewerOpen.value = false
+  pickPhoto()
+}
+
+const removePhotoFromViewer = () => {
+  isPhotoViewerOpen.value = false
+  removePhoto()
 }
 
 // Resize and center-crop the chosen image so a profile photo stays small
@@ -673,12 +732,6 @@ const handlePhotoFile = (event) => {
   font-size: 11.5px;
   line-height: 1.45;
   color: #94a3b8;
-}
-
-.hero-actions {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
 }
 
 .photo-input {
@@ -1007,15 +1060,88 @@ const handlePhotoFile = (event) => {
   border-color: #cbd5e1;
 }
 
-.ghost-btn.small {
-  padding: 6px 10px;
-  font-size: 11px;
-}
-
 .ghost-btn.danger {
   color: #dc2626;
   border-color: #fecaca;
   background: #fef2f2;
+}
+
+/* Full photo viewer */
+.photo-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 3000;
+  animation: viewerFade 0.18s ease;
+}
+
+@keyframes viewerFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.photo-viewer {
+  position: relative;
+  width: min(92vw, 460px);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.photo-viewer-image {
+  width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #f1f5f9;
+  display: block;
+}
+
+.viewer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.viewer-actions .primary-btn,
+.viewer-actions .ghost-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.viewer-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #e9ecef;
+  background: white;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.viewer-close:hover {
+  background: #f8f9fa;
+  color: #334155;
 }
 
 .db-note {
@@ -1063,10 +1189,6 @@ const handlePhotoFile = (event) => {
 
   .profile-hero {
     padding: 16px;
-  }
-
-  .hero-actions {
-    width: 100%;
   }
 
   .profile-tab {

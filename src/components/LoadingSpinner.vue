@@ -1,10 +1,20 @@
 <template>
-  <div v-if="isLoading" class="loading-overlay">
-    <div class="loading-container">
-      <div class="loading-spinner"></div>
-      <p class="loading-text">{{ text }}</p>
+  <Transition name="loading-fade">
+    <div
+      v-if="isLoading"
+      class="loading-overlay"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="loading-container">
+        <div class="loading-emblem">
+          <div class="loading-spinner"></div>
+          <span class="loading-mark">汉</span>
+        </div>
+        <p class="loading-text">{{ text }}</p>
+      </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <script>
@@ -17,7 +27,7 @@ export default {
     },
     text: {
       type: String,
-      default: 'Processing...'
+      default: 'Loading...'
     }
   }
 }
@@ -26,44 +36,54 @@ export default {
 <style scoped>
 .loading-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  inset: 0;
+  background: linear-gradient(135deg, #f8faff 0%, #eef1ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s ease;
+  z-index: 3000;
 }
 
 .loading-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 20px;
+  gap: 18px;
+  padding: 24px;
+}
+
+.loading-emblem {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .loading-spinner {
-  width: 56px;
-  height: 56px;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #ffffff;
-  border-right-color: #ffffff;
+  position: absolute;
+  inset: 0;
+  border: 3px solid #dbe2ff;
+  border-top-color: #4a6cf7;
+  border-right-color: #4a6cf7;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.9s linear infinite;
+}
+
+.loading-mark {
+  font-size: 28px;
+  font-weight: 700;
+  color: #4a6cf7;
+  line-height: 1;
 }
 
 .loading-text {
   margin: 0;
   font-size: 15px;
-  color: white;
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  letter-spacing: 0.3px;
+  color: #475569;
+  font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
 @keyframes spin {
@@ -72,12 +92,13 @@ export default {
   }
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.loading-fade-enter-active,
+.loading-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.loading-fade-enter-from,
+.loading-fade-leave-to {
+  opacity: 0;
 }
 </style>

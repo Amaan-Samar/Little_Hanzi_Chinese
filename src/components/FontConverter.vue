@@ -4,20 +4,9 @@
     @dragover.prevent
     @drop.prevent="handleFileDrop"
   >
-    <!-- Header with Logo and article actions -->
-    <div class="app-header">
-      <div class="logo-section">
-        <h1 class="logo">LittleHanzi</h1>
-      </div>
+    <!-- Home header: article actions live here, other tabs get a clean page. -->
+    <div v-if="activeView === 'home'" class="app-header">
       <div class="header-buttons">
-        <button
-          class="new-tab-btn"
-          @click="openNewTab"
-          title="New article tab"
-        >
-          <Plus :size="20" />
-        </button>
-
         <button
           v-if="inputText.trim()"
           class="share-icon-btn"
@@ -34,10 +23,21 @@
           <Info :size="22" />
         </button>
       </div>
+
+      <button
+        class="new-tab-btn"
+        @click="openNewTab"
+        title="New article tab"
+      >
+        <Plus :size="22" />
+      </button>
     </div>
 
     <!-- Open articles: switch contexts without losing the editor state. -->
-    <div v-if="workspaceTabs.length > 1" class="workspace-tabs">
+    <div
+      v-if="activeView === 'home' && workspaceTabs.length > 1"
+      class="workspace-tabs"
+    >
       <div class="workspace-tabs-scroll">
         <button
           v-for="tab in workspaceTabs"
@@ -102,8 +102,6 @@
 
     <div class="main-content">
       <div v-show="activeView === 'home'" class="home-view">
-      <LoadingSpinner :isLoading="isLoading" :text="loadingText" />
-
       <!-- "Continue where you left off" prompt -->
       <Transition name="resume">
         <div v-if="resumeArticle" class="resume-banner">
@@ -450,12 +448,15 @@
       </div>
     </div>
 
+    <!-- Loading screen: global, so opening an article from any tab shows it. -->
+    <LoadingSpinner :isLoading="isLoading" :text="loadingText" />
+
     <!-- Toast notification: global, so every tab and modal can show it. -->
     <div v-if="showSaveToast" class="toast" :class="`toast-${toastType}`">
       <span>{{ toastMessage }}</span>
     </div>
 
-    <BottomNav v-model="activeView" />
+    <BottomNav v-model="activeView" :profile-photo="profile.photo" />
 
     <!-- Confirmation Modal -->
     <ConfirmModal
@@ -658,8 +659,75 @@ export default {
     const showConfirmModal = ref(false);
     const isInfoModalOpen = ref(false);
     const containerWidth = ref(800); // Default container width
-    const isLoading = ref(false); // Add loading state
-    const loadingText = ref('Processing...'); // Add loading text
+    // Start with the loading screen visible: a restored article should never
+    // flash an empty editor (or a blank white screen) before it is ready.
+    const hasRestorableWorkspace = (() => {
+      try {
+        const parsed = JSON.parse(
+          localStorage.getItem('littleHanzi_workspace') || 'null'
+        )
+        return Boolean(
+          parsed?.tabs?.some(
+            (tab) =>
+              tab &&
+              (tab.articleId ||
+                String(tab.chinese || '').trim() ||
+                String(tab.english || '').trim())
+          )
+        )
+      } catch {
+        return false
+      }
+    })();
+    const isLoading = ref(true); // Add loading state
+    const loadingText = ref(
+      hasRestorableWorkspace ? 'Loading your article...' : 'Loading Little Hanzi...'
+    ); // Add loading text
+    let loadingToken = 0;
+    let loadingStartedAt = 0;
+    const MIN_LOADING_MS = 350;
+
+    // Wait until the browser has painted a frame, so a heavy pinyin layout
+    // cannot block the loading screen from appearing. Background tabs can
+    // throttle rAF, so a short timeout guarantees the wait always resolves.
+    const waitForPaint = () =>
+      new Promise((resolve) => {
+        let settled = false;
+        let timer = null;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          resolve();
+        };
+        timer = setTimeout(finish, 150);
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => requestAnimationFrame(finish));
+        } else {
+          finish();
+        }
+      });
+
+    const beginLoading = (text) => {
+      const token = ++loadingToken;
+      loadingStartedAt = performance.now();
+      loadingText.value = text;
+      isLoading.value = true;
+      return token;
+    };
+
+    const endLoading = async (token) => {
+      const elapsed = performance.now() - loadingStartedAt;
+      if (elapsed < MIN_LOADING_MS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, MIN_LOADING_MS - elapsed)
+        );
+      }
+      // A newer load took over while this one was finishing.
+      if (token !== loadingToken) return;
+      await nextTick();
+      isLoading.value = false;
+    };
 
     const showSaveToast = ref(false);
     const toastMessage = ref('');
@@ -1303,8 +1371,7 @@ export default {
       if (view !== 'home') flushActiveTab()
     })
 
-    const loadArticleIntoEditor = async (article) => {
-      if (!article) return
+    const applyArticleToEditor = async (article) => {
       const articleId = article.id
       const previous = activeTab.value
 
@@ -1349,6 +1416,22 @@ export default {
       activeTabKey.value = tab.key
       applyTabToEditor(tab)
       persistWorkspaceNow()
+    }
+
+    const loadArticleIntoEditor = async (article) => {
+      if (!article) return
+
+      const token = beginLoading('Loading article...')
+      try {
+        // Let the loading screen paint before the article layout work runs.
+        await waitForPaint()
+        await applyArticleToEditor(article)
+      } catch (error) {
+        console.error('Failed to load article:', error)
+        showToastMessage('Could not load that article.', 'error')
+      } finally {
+        await endLoading(token)
+      }
     }
 
     const restoreWorkspace = () => {
@@ -2240,10 +2323,26 @@ export default {
     }
 
     onMounted(async () => {
-      restoreWorkspace()
+      const token = beginLoading(
+        hasRestorableWorkspace
+          ? 'Loading your article...'
+          : 'Loading Little Hanzi...'
+      )
+      try {
+        // Paint the loading screen before restoring a potentially long article.
+        await waitForPaint()
 
-      const openedShare = await handleIncomingShare()
-      if (!openedShare) resumeArticle.value = getResumeArticle()
+        restoreWorkspace()
+
+        const openedShare = await handleIncomingShare()
+        if (!openedShare) resumeArticle.value = getResumeArticle()
+
+        await nextTick()
+      } catch (error) {
+        console.error('Failed to restore the app:', error)
+      } finally {
+        await endLoading(token)
+      }
 
       // Restore a previously connected database file in the background.
       initBackup()
@@ -2420,30 +2519,15 @@ export default {
 .app-header {
   position: sticky;
   top: 0;
-  background: white;
-  border-bottom: 1px solid #e9ecef;
-  padding: 12px 24px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  z-index: 100;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e9ecef;
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.95);
-}
-
-.logo-section {
-  display: flex;
-  align-items: center;
-}
-
-.logo {
-  font-size: 20px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #4a6cf7 0%, #6c5ce7 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0;
+  z-index: 100;
 }
 
 .main-content {
@@ -2826,21 +2910,30 @@ export default {
 }
 
 .new-tab-btn {
-  background: #eef1ff;
-  border: 1px solid #d8defb;
-  color: #4a6cf7;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid #dee2e6;
+  border-radius: 50%;
+  background: #e9ecef;
+  color: #343a40;
   cursor: pointer;
-  padding: 7px;
-  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
 }
 
 .new-tab-btn:hover {
-  background: #e0e6ff;
-  transform: scale(1.05);
+  background: #dee2e6;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+}
+
+.new-tab-btn:active {
+  transform: translateY(0);
 }
 
 /* Open article tabs */

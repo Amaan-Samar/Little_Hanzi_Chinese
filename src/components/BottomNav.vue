@@ -8,7 +8,13 @@
       @click="$emit('update:modelValue', tab.id)"
     >
       <span class="nav-icon">
-        <component :is="tab.icon" :size="21" />
+        <img
+          v-if="tab.id === 'profile' && profilePhoto"
+          :src="profilePhoto"
+          alt="Profile"
+          class="nav-avatar"
+        />
+        <component v-else :is="tab.icon" :size="21" />
       </span>
       <span class="nav-label">{{ tab.label }}</span>
     </button>
@@ -22,6 +28,10 @@ defineProps({
   modelValue: {
     type: String,
     default: 'home',
+  },
+  profilePhoto: {
+    type: String,
+    default: '',
   },
 })
 
@@ -84,6 +94,21 @@ const tabs = [
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 23px;
+  height: 23px;
+}
+
+.nav-avatar {
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  border: 1px solid #d8defb;
+}
+
+.nav-tab.active .nav-avatar {
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.28);
 }
 
 .nav-label {

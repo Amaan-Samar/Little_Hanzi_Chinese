@@ -456,7 +456,11 @@
       <span>{{ toastMessage }}</span>
     </div>
 
-    <BottomNav v-model="activeView" :profile-photo="profile.photo" />
+    <BottomNav
+      v-if="!isLoading"
+      v-model="activeView"
+      :profile-photo="profile.photo"
+    />
 
     <!-- Confirmation Modal -->
     <ConfirmModal
@@ -659,30 +663,10 @@ export default {
     const showConfirmModal = ref(false);
     const isInfoModalOpen = ref(false);
     const containerWidth = ref(800); // Default container width
-    // Start with the loading screen visible: a restored article should never
-    // flash an empty editor (or a blank white screen) before it is ready.
-    const hasRestorableWorkspace = (() => {
-      try {
-        const parsed = JSON.parse(
-          localStorage.getItem('littleHanzi_workspace') || 'null'
-        )
-        return Boolean(
-          parsed?.tabs?.some(
-            (tab) =>
-              tab &&
-              (tab.articleId ||
-                String(tab.chinese || '').trim() ||
-                String(tab.english || '').trim())
-          )
-        )
-      } catch {
-        return false
-      }
-    })();
-    const isLoading = ref(true); // Add loading state
-    const loadingText = ref(
-      hasRestorableWorkspace ? 'Loading your article...' : 'Loading Little Hanzi...'
-    ); // Add loading text
+    // The app starts with a clean tab and no loading screen: the last article
+    // is only rendered when the reader accepts the resume prompt.
+    const isLoading = ref(false); // Add loading state
+    const loadingText = ref('Loading...'); // Add loading text
     let loadingToken = 0;
     let loadingStartedAt = 0;
     const MIN_LOADING_MS = 350;
@@ -1391,6 +1375,18 @@ export default {
 
       flushActiveTab()
 
+      // Drop empty starter/draft tabs so opening an article never leaves a
+      // blank tab sitting beside it (for example after a clean launch).
+      const populatedTabs = workspaceTabs.value.filter(
+        (tab) =>
+          tab.articleId ||
+          String(tab.chinese || '').trim() ||
+          String(tab.english || '').trim()
+      )
+      if (populatedTabs.length !== workspaceTabs.value.length) {
+        workspaceTabs.value = populatedTabs
+      }
+
       let tab = workspaceTabs.value.find((item) => item.articleId === articleId)
       if (!tab) {
         tab = makeTab({
@@ -1434,63 +1430,19 @@ export default {
       }
     }
 
-    const restoreWorkspace = () => {
-      let parsed = null
-      try {
-        parsed = JSON.parse(localStorage.getItem(WORKSPACE_KEY) || 'null')
-      } catch (error) {
-        console.error('Failed to restore open tabs:', error)
-      }
-
-      let tabs = []
-      if (parsed && Array.isArray(parsed.tabs)) {
-        tabs = parsed.tabs
-          .filter((raw) => raw && typeof raw === 'object')
-          .map((raw) => {
-            const article = raw.articleId
-              ? articles.value.find((item) => item.id === raw.articleId)
-              : null
-            return makeTab({
-              key:
-                typeof raw.key === 'string' && raw.key ? raw.key : undefined,
-              articleId: article?.id || raw.articleId || null,
-              chinese: article
-                ? article.chineseContent || ''
-                : raw.chinese || '',
-              english: article
-                ? article.englishContent || ''
-                : raw.english || '',
-              bookmark: article
-                ? article.bookmark ?? null
-                : raw.bookmark ?? null,
-              detached: Boolean(raw.detached),
-            })
-          })
-      }
-
-      if (!tabs.length) tabs = [makeTab()]
-
-      workspaceTabs.value = tabs
-      const requestedKey = parsed?.activeKey
-      const activeKey = tabs.some((tab) => tab.key === requestedKey)
-        ? requestedKey
-        : tabs[0].key
-      activeTabKey.value = activeKey
-      applyTabToEditor(tabs.find((tab) => tab.key === activeKey), {
-        scroll: false,
-      })
-      persistWorkspaceNow()
-    }
-
     const resumeReading = async () => {
       const article = resumeArticle.value
       if (!article) return
+
+      resumeArticle.value = null
       await loadArticleIntoEditor(article)
     }
 
     const dismissResume = () => {
       clearLastSession()
       resumeArticle.value = null
+      // Keep the clean startup tab as the saved workspace for the next launch.
+      persistWorkspaceNow()
     }
 
     const handleChineseInput = () => {
@@ -2323,25 +2275,20 @@ export default {
     }
 
     onMounted(async () => {
-      const token = beginLoading(
-        hasRestorableWorkspace
-          ? 'Loading your article...'
-          : 'Loading Little Hanzi...'
-      )
+      // Always start on a clean tab. The previous article is rendered only if
+      // the reader accepts the "Continue where you left off" prompt, so launch
+      // stays fast even for very long articles.
+      const cleanTab = makeTab()
+      workspaceTabs.value = [cleanTab]
+      activeTabKey.value = cleanTab.key
+
       try {
-        // Paint the loading screen before restoring a potentially long article.
-        await waitForPaint()
-
-        restoreWorkspace()
-
         const openedShare = await handleIncomingShare()
         if (!openedShare) resumeArticle.value = getResumeArticle()
 
         await nextTick()
       } catch (error) {
         console.error('Failed to restore the app:', error)
-      } finally {
-        await endLoading(token)
       }
 
       // Restore a previously connected database file in the background.

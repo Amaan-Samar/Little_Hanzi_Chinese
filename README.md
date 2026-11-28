@@ -6,7 +6,7 @@ I built it for myself because I couldn't find an open-source reading tool that w
 
 **Live app:** [Little Hanzi Chinese](https://amaan-samar.github.io/Little_Hanzi_Chinese/)
 
-![LittleHanzi Demo](./data/demo/demo.png)
+![LittleHanzi Demo](public/assests/Home_page_with_article_loaded.png)
 
 ## What it does
 
@@ -54,8 +54,8 @@ Everything is stored locally in your browser. There are no accounts, no servers,
 
 - **QR code sharing** — one QR carries the full article (Chinese + English), with a downloadable PNG.
 - **Share link** — a compressed URL payload that opens the article directly in the app.
-- **Native sharing** — use the Web Share API to send the link or a JSON file to another app.
-- **JSON file export** — send the article file through any messaging app.
+- **Native file sharing** — “Share file” saves the JSON copy and opens your device's share menu so you can send it through any app; if the browser cannot share files, the downloaded copy stays in your Files or Downloads folder.
+- **JSON file export** — download the article file directly, without opening the share menu.
 - **Incoming shares** — open a shared link or scan a QR code to import the article, with duplicate-merge handling.
 - **Shared-by attribution** — your profile name is attached to what you share.
 - **Bilingual payloads** — one code carries both languages; if an article is too large to encode, the app tells you and offers the JSON file instead.

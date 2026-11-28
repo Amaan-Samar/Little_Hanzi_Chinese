@@ -73,12 +73,12 @@
           </div>
 
           <button
-            v-if="canNativeShare"
             class="native-share-btn"
-            @click="shareNatively"
+            :disabled="!shareBundle"
+            @click="shareFile"
           >
             <Share2 :size="16" />
-            {{ canShareFiles ? 'Share JSON file' : 'Share to another app' }}
+            Share file
           </button>
 
           <div class="download-grid">
@@ -92,14 +92,15 @@
             </button>
             <button class="secondary-btn" @click="downloadFile">
               <FileDown :size="15" />
-              Article JSON
+              Download JSON
             </button>
           </div>
 
           <p class="share-footnote">
-            The JSON file contains both the Chinese text and its English
-            translation. Open it from History → Open shared file, or drop it
-            anywhere on the app.
+            “Share file” saves a copy and opens your device's share menu so you
+            can send the JSON through any app. If your browser cannot share
+            files, the copy stays in your Downloads folder. The file contains
+            both the Chinese text and its English translation.
           </p>
         </div>
       </div>
@@ -176,21 +177,18 @@ const makeShareFile = () =>
     type: 'application/json',
   })
 
-const canShareFiles = computed(() => {
-  if (
-    typeof navigator === 'undefined' ||
-    typeof navigator.share !== 'function' ||
-    typeof navigator.canShare !== 'function' ||
-    typeof File === 'undefined'
-  ) {
-    return false
-  }
+// `canShare` is not implemented everywhere. When it is missing but
+// `navigator.share` exists, try the file share and fall back to a download
+// if the browser rejects it.
+const canShareFilesNow = () => {
+  if (!canNativeShare.value || typeof File === 'undefined') return false
+  if (typeof navigator.canShare !== 'function') return true
   try {
     return navigator.canShare({ files: [makeShareFile()] })
   } catch {
     return false
   }
-})
+}
 
 const emitName = () => {
   emit('save-name', name.value.slice(0, 40))
@@ -270,41 +268,50 @@ const downloadFile = () => {
   downloadJson(shareBundle.value, shareFileName.value)
 }
 
-const shareNatively = async () => {
-  if (!canNativeShare.value) return
+const shareFile = async () => {
+  if (!shareBundle.value) return
 
-  const article = props.article
-
-  try {
-    if (canShareFiles.value) {
-      await navigator.share({
+  // Open the native share sheet while the click is still a user gesture.
+  // A copy is saved either way, so the file is never lost when the browser
+  // has no file-sharing support or the share is cancelled.
+  if (canShareFilesNow()) {
+    let sharePromise
+    try {
+      sharePromise = navigator.share({
         files: [makeShareFile()],
         title: articleTitle.value,
         text: 'A Little Hanzi article with Chinese and English.',
       })
-      return
+    } catch (error) {
+      sharePromise = Promise.reject(error)
     }
 
-    const textParts = [article.chineseContent || '']
-    if ((article.englishContent || '').trim()) {
-      textParts.push(article.englishContent)
-    }
+    downloadFile()
 
-    const data = {
-      title: articleTitle.value,
-      text: textParts.filter(Boolean).join('\n\n'),
+    try {
+      await sharePromise
+      notify(
+        'Article file shared. A copy was also saved to your downloads.',
+        'success'
+      )
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        notify(
+          'Article file downloaded. Open it from your Files or Downloads app to share it.',
+          'info'
+        )
+      }
     }
-
-    // Long links are awkward in messaging apps, and the text above already
-    // carries the article. Only attach the link when it fits comfortably.
-    if (!qrTooLarge.value && fullShare.value.url) data.url = fullShare.value.url
-
-    await navigator.share(data)
-  } catch (error) {
-    if (error?.name !== 'AbortError') {
-      notify('Could not open the share menu. Use Copy or Download instead.', 'error')
-    }
+    return
   }
+
+  // No file-share support: still give the reader the file with clear next
+  // steps instead of silently sharing text or doing nothing.
+  downloadFile()
+  notify(
+    'Article file downloaded. Share it from your Files or Downloads app.',
+    'info'
+  )
 }
 </script>
 

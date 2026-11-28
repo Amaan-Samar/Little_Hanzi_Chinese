@@ -10,7 +10,8 @@
           <h3 class="share-title">Share article</h3>
           <p class="share-subtitle">
             Chinese and English travel together in one compressed article. Scan
-            the QR code, open the link, or send the JSON file through any app.
+            the QR code, open the link, or send the article file through any
+            app.
           </p>
 
           <div class="language-row">
@@ -48,9 +49,9 @@
           <div v-else class="notice notice-info">
             <AlertTriangle :size="18" />
             <p>
-              This article is too large for one QR code. Send the JSON file
-              below instead — your friend can open it from History → Open shared
-              file.
+              This article is too large for one QR code. Send the article file
+              below instead — your friend can open it from History → Open
+              shared file.
             </p>
           </div>
 
@@ -96,11 +97,16 @@
             </button>
           </div>
 
+          <p v-if="savedFileName" class="saved-file-note">
+            <FileDown :size="14" />
+            <span>Saved to Downloads/{{ savedFileName }}</span>
+          </p>
+
           <p class="share-footnote">
-            “Share file” saves a copy and opens your device's share menu so you
-            can send the JSON through any app. If your browser cannot share
-            files, the copy stays in your Downloads folder. The file contains
-            both the Chinese text and its English translation.
+            “Share file” saves an importable .txt copy and opens your device's
+            share menu so you can send it through any app. Android's share sheet
+            does not accept .json, so the shared file uses .txt while keeping
+            the same Little Hanzi content.
           </p>
         </div>
       </div>
@@ -158,12 +164,10 @@ const qrTooLarge = computed(
 const shareBundle = computed(() =>
   props.article ? makeShareBundle([props.article], shareBy.value) : null,
 )
-const shareFileName = computed(
-  () => `${slugify(articleTitle.value, 'article')}-little-hanzi.json`,
-)
 const shareJson = computed(() =>
   shareBundle.value ? JSON.stringify(shareBundle.value, null, 2) : '',
 )
+const savedFileName = ref('')
 
 const canNativeShare = computed(
   () =>
@@ -172,23 +176,23 @@ const canNativeShare = computed(
     Boolean((props.article?.chineseContent || '').trim()),
 )
 
-const makeShareFile = () =>
-  new File([shareJson.value], shareFileName.value, {
-    type: 'application/json',
-  })
-
-// `canShare` is not implemented everywhere. When it is missing but
-// `navigator.share` exists, try the file share and fall back to a download
-// if the browser rejects it.
-const canShareFilesNow = () => {
-  if (!canNativeShare.value || typeof File === 'undefined') return false
-  if (typeof navigator.canShare !== 'function') return true
-  try {
-    return navigator.canShare({ files: [makeShareFile()] })
-  } catch {
-    return false
-  }
+// Android's share sheet allows .txt (text/plain) but rejects .json
+// (application/json), so share an importable text file instead of a JSON
+// file. A timestamp keeps every download distinct.
+const makeFileName = (extension) => {
+  const now = new Date()
+  const pad = (value, size = 2) => String(value).padStart(size, '0')
+  const stamp =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}` +
+    `-${pad(now.getMilliseconds(), 3)}`
+  return `${slugify(articleTitle.value, 'article')}-little-hanzi-${stamp}.${extension}`
 }
+
+const makeShareFile = (fileName) =>
+  new File([shareJson.value], fileName, {
+    type: 'text/plain',
+  })
 
 const emitName = () => {
   emit('save-name', name.value.slice(0, 40))
@@ -230,6 +234,7 @@ watch(
     if (open) {
       name.value = props.displayName || ''
       copied.value = false
+      savedFileName.value = ''
       generateQr()
     }
   },
@@ -265,53 +270,66 @@ const downloadQr = () => {
 
 const downloadFile = () => {
   if (!shareBundle.value) return
-  downloadJson(shareBundle.value, shareFileName.value)
+  const fileName = makeFileName('json')
+  downloadJson(shareBundle.value, fileName)
+  savedFileName.value = fileName
+}
+
+const downloadShareFile = (fileName) => {
+  downloadJson(shareBundle.value, fileName, 'text/plain')
+  savedFileName.value = fileName
 }
 
 const shareFile = async () => {
   if (!shareBundle.value) return
 
-  // Open the native share sheet while the click is still a user gesture.
-  // A copy is saved either way, so the file is never lost when the browser
-  // has no file-sharing support or the share is cancelled.
-  if (canShareFilesNow()) {
-    let sharePromise
-    try {
-      sharePromise = navigator.share({
-        files: [makeShareFile()],
-        title: articleTitle.value,
-        text: 'A Little Hanzi article with Chinese and English.',
-      })
-    } catch (error) {
-      sharePromise = Promise.reject(error)
-    }
+  // Android's share sheet accepts .txt but rejects .json, so share a
+  // text/plain copy that Little Hanzi can still import on the other side.
+  const fileName = makeFileName('txt')
 
-    downloadFile()
-
-    try {
-      await sharePromise
-      notify(
-        'Article file shared. A copy was also saved to your downloads.',
-        'success'
-      )
-    } catch (error) {
-      if (error?.name !== 'AbortError') {
-        notify(
-          'Article file downloaded. Open it from your Files or Downloads app to share it.',
-          'info'
-        )
-      }
-    }
+  if (!canNativeShare.value) {
+    downloadShareFile(fileName)
+    notify(
+      `Saved to Downloads/${fileName}. Share it from your Files app.`,
+      'info'
+    )
     return
   }
 
-  // No file-share support: still give the reader the file with clear next
-  // steps instead of silently sharing text or doing nothing.
-  downloadFile()
-  notify(
-    'Article file downloaded. Share it from your Files or Downloads app.',
-    'info'
-  )
+  // Open the native share sheet while the click is still a user gesture,
+  // then save a copy so the file is never lost if the share is cancelled.
+  let sharePromise
+  try {
+    sharePromise = navigator.share({
+      files: [makeShareFile(fileName)],
+      title: articleTitle.value,
+      text: 'A Little Hanzi article with Chinese and English.',
+    })
+  } catch (error) {
+    sharePromise = Promise.reject(error)
+  }
+
+  downloadShareFile(fileName)
+
+  try {
+    await sharePromise
+    notify(
+      `Article shared. A copy is saved to Downloads/${fileName}.`,
+      'success'
+    )
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      notify(
+        `Saved to Downloads/${fileName}. Share it from your Files app.`,
+        'info'
+      )
+    } else {
+      notify(
+        `The share menu could not open. The file is in Downloads/${fileName}.`,
+        'error'
+      )
+    }
+  }
 }
 </script>
 
@@ -631,6 +649,26 @@ const shareFile = async () => {
 .secondary-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.saved-file-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.saved-file-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .share-footnote {

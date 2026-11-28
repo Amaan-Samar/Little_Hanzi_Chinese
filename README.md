@@ -36,7 +36,7 @@ Everything is stored locally in your browser. There are no accounts, no servers,
 - **Paragraph actions** — bookmark, like, edit the paragraph in the source editor, or copy it from the `⋮` menu.
 - **Edit in a popup** — open the Chinese or English text in a full editor modal for longer edits.
 - **Paste and clear** — one-tap paste from the clipboard and clear either field.
-- **Drag and drop** — drop a Little Hanzi `.json` bundle onto the app to import it.
+- **Drag and drop** — drop a Little Hanzi `.json` or `.txt` bundle onto the app to import it.
 - **Loading screen** — a branded spinner shows while restoring your last article or opening one from History, so the app never sits on a blank screen.
 - **Toasts** — clear confirmation for saves, shares, imports, deletes, and errors.
 
@@ -54,8 +54,8 @@ Everything is stored locally in your browser. There are no accounts, no servers,
 
 - **QR code sharing** — one QR carries the full article (Chinese + English), with a downloadable PNG.
 - **Share link** — a compressed URL payload that opens the article directly in the app.
-- **Native file sharing** — “Share file” saves the JSON copy and opens your device's share menu so you can send it through any app; if the browser cannot share files, the downloaded copy stays in your Files or Downloads folder.
-- **JSON file export** — download the article file directly, without opening the share menu.
+- **Native file sharing** — “Share file” saves a timestamped, importable `.txt` copy and opens your device's share menu so you can send it through any app (Android's share sheet rejects `.json` but accepts `.txt`). The modal shows the saved location and filename, and the copy stays in Downloads if sharing is cancelled or unsupported.
+- **JSON file export** — download a timestamped `.json` article file directly, without opening the share menu; filenames include the date and time so repeat downloads never collide.
 - **Incoming shares** — open a shared link or scan a QR code to import the article, with duplicate-merge handling.
 - **Shared-by attribution** — your profile name is attached to what you share.
 - **Bilingual payloads** — one code carries both languages; if an article is too large to encode, the app tells you and offers the JSON file instead.

@@ -946,8 +946,12 @@ export default {
       const file = event.dataTransfer?.files?.[0]
       if (!file) return
 
-      if (!/\.json$/i.test(file.name) && file.type !== 'application/json') {
-        showToastMessage('Drop a Little Hanzi .json file.', 'error')
+      if (
+        !/\.(json|txt)$/i.test(file.name) &&
+        file.type !== 'application/json' &&
+        file.type !== 'text/plain'
+      ) {
+        showToastMessage('Drop a Little Hanzi .json or .txt file.', 'error')
         return
       }
 

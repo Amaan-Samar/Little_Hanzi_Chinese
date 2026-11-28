@@ -77,8 +77,11 @@ const idbDelete = async (key) => {
 
 const filePickerTypes = [
   {
-    description: 'Little Hanzi backup',
-    accept: { 'application/json': ['.json'] },
+    description: 'Little Hanzi backup or shared article',
+    accept: {
+      'application/json': ['.json'],
+      'text/plain': ['.txt'],
+    },
   },
 ]
 
@@ -258,7 +261,7 @@ export function useBackup() {
     return new Promise((resolve) => {
       const input = document.createElement('input')
       input.type = 'file'
-      input.accept = 'application/json,.json'
+      input.accept = 'application/json,.json,text/plain,.txt'
       input.style.position = 'fixed'
       input.style.left = '-9999px'
       let settled = false

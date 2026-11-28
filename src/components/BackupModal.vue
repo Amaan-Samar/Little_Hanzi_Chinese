@@ -84,7 +84,7 @@
                 <Upload :size="17" class="row-icon" />
                 <span class="row-copy">
                   <span class="row-title">Open a shared file or backup</span>
-                  <span class="row-sub">Pick a .json file from this device</span>
+                  <span class="row-sub">Pick a .json or .txt file from this device</span>
                 </span>
               </button>
 
@@ -101,8 +101,8 @@
           </div>
 
           <p class="backup-footnote">
-            Received an article file? Open it here, or drop the .json file onto
-            the app. Imported articles arrive unread and keep the name of the
+            Received an article file? Open it here, or drop the .json or .txt
+            file onto the app. Imported articles arrive unread and keep the name of the
             person who shared them.
           </p>
         </div>

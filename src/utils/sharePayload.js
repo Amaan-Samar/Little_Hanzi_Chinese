@@ -313,9 +313,13 @@ export const slugify = (value, fallback = 'article') => {
   return slug || fallback
 }
 
-export const downloadJson = (data, filename) => {
+export const downloadJson = (
+  data,
+  filename,
+  type = 'application/json',
+) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: 'application/json',
+    type,
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
